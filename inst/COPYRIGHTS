@@ -1,4 +1,4 @@
-The sigmoid optimizer in R/svm-probability-calibration.R adapts LIBSVM's
+The sigmoid optimizer in R/model-kernel.R adapts LIBSVM's
 sigmoid_train algorithm. The remaining package code retains its own license.
 Source: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
 

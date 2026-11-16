@@ -1,3 +1,5 @@
+# ---- result-page ----
+
 sb_page_scalar <- function(value, default = NULL) {
   if (is.null(value) || length(value) != 1L || is.na(value)) default else unname(value)
 }
@@ -170,35 +172,8 @@ sb_open_result_page <- function(path) {
   utils::browseURL(path)
 }
 
-#' Open a model-by-cohort results matrix
-#'
-#' Create a standalone HTML page from saved results. Rows show feature selectors
-#' and learner names; columns show development, validation and test cohorts.
-#' Metrics are read from the supplied results without refitting models.
-#'
-#' @param x A saved CV/evaluation result, comparison, external collection,
-#'   [sb_compare_cohorts()] result, or uniquely named list of saved results.
-#' @param roles Optional named dataset roles: `"development_cv"`, `"training"`,
-#'   `"validation"`, `"test"` or `"external"`. CV objects retain their CV role.
-#'   Unlabeled external evaluations remain external, not assumed validation.
-#' @param path New HTML file path. Defaults to a temporary report.
-#' @param open Open the page in the configured browser; defaults to `interactive()`.
-#' @param title Page title.
-#' @param overwrite Replace an existing report only when explicitly TRUE.
-#' @return Invisibly, the normalized path of the saved HTML file.
-#' @details The page contains summary metrics and model metadata, not patient
-#'   rows or raw error messages. Original model IDs and parameter settings
-#'   remain available in details. Default sorting uses development CV when
-#'   present; it never selects or refits a winning model. Optional validation
-#'   means exclude training/test cohorts and require all selected validation
-#'   cells to be available for the same metric and horizon.
+#' @rdname sb_render_report
 #' @export
-#' @examples
-#' d <- sb_example_binary(50, seed = 1)
-#' task <- sb_binary_task(d, "patient_id", "outcome", c("gene_a", "gene_b"))
-#' result <- sb_compare_models(task, models = "logistic", folds = 3, view = FALSE)
-#' page <- sb_view_results(result, open = FALSE)
-#' file.exists(page)
 sb_view_results <- function(x, roles = NULL, path = tempfile(fileext = ".html"),
                             open = interactive(), title = "Model comparison",
                             overwrite = FALSE) {

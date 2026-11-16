@@ -1,6 +1,29 @@
+# stormbreaker 0.3.47.1
+
+* `sb_split_binary()` creates a stratified internal holdout without separating
+  observations from the same patient group. The new clinical binary example
+  compares six learner families on development folds, then evaluates one locked
+  candidate on the holdout.
+* `sb_pipeline()` accepts optional RF Top-K and Spearman pruning settings. The
+  existing importance threshold remains the default.
+* `sb_plot_shap_heatmap()` plots saved signed contributions. `export_run()` can
+  save 300-dpi PNGs with an optional font family; PDF remains the default.
+* `sb_binary_workflow_plan()` prepares installed, registered binary prediction
+  configurations for a common screening step and lists skipped methods. It does
+  not train or export. `finish_run()` can retain native diagnostics without
+  drawing, and `export_run()` can write selected figures or data only.
+
+* `finish_run()` and `plots()` include additional native diagnostics through the common workflow, with automatic figure export and saved-model reuse.
+* `finish_run()` / `sb_complete_run()` and `eval_external()` / `sb_evaluate_external()` now default to `reverse = FALSE`, preserving the development-defined binary direction. Explicit `reverse = TRUE` retains outcome-dependent direction correction; survival behavior is unchanged.
+* `plot_shap_one()` retains feature names for a single-column contribution matrix, including a single explained observation and zero contributions.
+* One English user guide now combines the workflows, parameter reference, advanced use and examples. The installed vignette renders the same guide; README links to this single entry point. The local start and result-comparison pages also use English. Multiclass support and optional direction correction are described consistently.
+* Function help is organized into 28 task-based topics while retaining every existing help name, signature and function-specific parameter description. Six core examples remain separate; additional examples now share `examples/advanced-examples.R`, which does not train models when sourced.
+* The selection example explicitly fits its declared Lasso + Logistic route instead of choosing the first listed pipeline, which could be a failed Lasso + Lasso combination.
+
 # stormbreaker 0.3.47
 
 * English guides, runnable tutorials and main workflow help examples have been updated. Core CI now includes tutorial behavior assertions.
+* Installation and quick-start instructions were refreshed. The data-reading example uses a synthetic cohort; obsolete example CSVs and pre-generated result pages were removed from the distribution.
 * `sb_complete_run()` retains log-rank status and errors in survival risk-group tables and exported issues; usable predictions and plots survive a failed test.
 * `sb_model_shap()` and `sb_tree_shap()` validate a saved fit once, reusing its prediction state inside permutations while retaining output checks. The estimator, seeds and score scales are unchanged.
 * `surv_risk_plots()` distinguishes successful, single-group, no-event and failed log-rank tests. Computation errors warn and retain their original message instead of becoming an unexplained NA.

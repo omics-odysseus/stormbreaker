@@ -1,3 +1,344 @@
+#' Bootstrap uncertainty and calibration
+#' @name sb_bootstrap_external
+#' @description Estimate uncertainty for external evaluation or optimism-corrected calibration and plot saved intervals.
+#' @rawRd \arguments{
+#' \item{evaluation}{
+#' A successful or incomplete
+#' \code{stormbreaker_external_evaluation} returned by \code{\link[=sb_evaluate_external]{sb_evaluate_external()}}.
+#' }
+#' \item{reps}{
+#' \strong{For \code{sb_bootstrap_external()}, \code{sb_bootstrap_external_comparison()}:} Number of ordinary patient-level bootstrap replicates. Must be an
+#' integer of at least 2. Defaults to 1000.
+#' 
+#' \strong{For \code{sb_bootstrap_calibration()}:} Number of ordinary bootstrap samples, default 1000.
+#' }
+#' \item{confidence_level}{
+#' Percentile interval confidence level strictly between
+#' 0 and 1. Defaults to 0.95.
+#' }
+#' \item{seed}{
+#' \strong{For \code{sb_bootstrap_external()}:} Positive integer seed. Reproducibility requires the same input,
+#' R version, and RNG kinds. The caller's random state is restored.
+#' 
+#' \strong{For \code{sb_bootstrap_external_comparison()}:} Positive integer seed. The caller's random state is restored.
+#' 
+#' \strong{For \code{sb_bootstrap_calibration()}:} Random seed.
+#' }
+#' \item{comparison}{
+#' A \code{stormbreaker_external_comparison} returned by
+#' \code{\link[=sb_compare_external]{sb_compare_external()}} with at least two distinct predictions.
+#' }
+#' \item{reference_pipeline_id}{
+#' The exact pipeline ID of the reference
+#' prediction. It must be declared independently of external outcomes.
+#' }
+#' \item{task}{
+#' Binary task with one independent patient per row. Grouped tasks
+#' are not supported by this ordinary-patient bootstrap interface.
+#' }
+#' \item{pipeline}{
+#' A predeclared binary pipeline. Its selection and tuning are
+#' rerun within every bootstrap sample; selection between pipelines is outside
+#' this procedure and is not corrected by it.
+#' }
+#' \item{grid}{
+#' Optional increasing prediction grid inside (0,1). The default
+#' spans the original predictions' 5th to 95th percentiles.
+#' }
+#' \item{x}{
+#' \strong{For \code{sb_plot_bootstrap_calibration()}:} A result from \code{\link[=sb_bootstrap_calibration]{sb_bootstrap_calibration()}}.
+#' 
+#' \strong{For \code{sb_plot_external_intervals()}:} An external bootstrap object, or a uniquely named list of such
+#' objects. For \code{sb_plot_external_difference}, use paired external bootstrap
+#' comparison objects instead. List names identify cohorts/result sets.
+#' }
+#' \item{metric}{
+#' One saved scalar metric, explicitly selected by name.
+#' }
+#' \item{cohort_label}{
+#' Optional label when supplying a single object.
+#' }
+#' }
+#' @rawRd \value{See the individual entries in Function reference.}
+#' @rawRd \section{Function reference}{
+#' \subsection{\code{sb_bootstrap_external()}}{
+#' \code{sb_bootstrap_external()} applies an ordinary nonparametric patient
+#' bootstrap to the paired endpoint and precomputed prediction rows already
+#' stored by \code{\link[=sb_evaluate_external]{sb_evaluate_external()}}. The fitted model and every supplied
+#' prediction remain fixed. The result therefore describes external-patient
+#' sampling uncertainty conditional on that locked model and those predictions;
+#' it does not include uncertainty from development fitting, feature selection,
+#' tuning, or model selection.
+#' For survival, \code{prediction_target} separately retains the endpoint time unit,
+#' whether a prediction horizon is present, its value when present, and whether
+#' that effective horizon came from the endpoint or the locked prediction. A
+#' risk-only evaluation is recorded as horizon-free rather than assigned a
+#' surrogate time point.
+#' 
+#' \strong{Returns:} A \code{stormbreaker_external_bootstrap} containing recomputed point
+#' targets, every target-by-replicate estimate and status, percentile
+#' intervals, the effective \code{prediction_target}, replicate accounting,
+#' resampling semantics, and provenance.
+#' Binary and locked-horizon survival scalar targets include
+#' observed/expected mean calibration; locked-horizon survival also includes
+#' Uno C and calibration slope as separate rows.
+#' Threshold-enabled binary and locked-horizon survival evaluations
+#' additionally contain a nested \code{decision_curve} component with raw
+#' replicate curves and paired pointwise net-benefit-difference intervals.
+#' 
+#' \strong{Details:} Binary replicates recompute ROC AUC, non-interpolated average precision,
+#' Brier score, unclipped log loss, observed-to-expected mean calibration, and
+#' separate calibration intercept and slope targets. Mean calibration may be
+#' zero when a draw contains no observed events and is unavailable when its
+#' expected event count is zero or its ratio is numerically non-finite; no
+#' clipping or continuity correction is applied. When the source binary
+#' evaluation contains researcher-declared
+#' decision thresholds, the same sampled patient table also recomputes model,
+#' treat-all, and treat-none net benefit. An optional nested decision-curve
+#' result retains the raw counts, threshold operating characteristics, and
+#' curves, then reports type-7 percentile
+#' intervals for the paired differences of model minus treat-all and model
+#' minus treat-none. Model minus treat-all is calculated directly from true
+#' negatives and false negatives rather than by subtracting two potentially
+#' large, nearly equal net-benefit values. These intervals are pointwise at the
+#' declared thresholds, not simultaneous coverage for the curve as a whole.
+#' They provide no p value, threshold recommendation, automatic decision, or
+#' proof of clinical effectiveness. They are not confidence intervals for the
+#' threshold operating characteristics. Scalar target tables remain separate
+#' from the nested decision-curve result. Survival replicates recompute pooled
+#' Harrell C. For
+#' a locked-horizon
+#' survival prediction, every replicate also refits only its external marginal
+#' reverse Kaplan-Meier censoring curve before recomputing IPCW Brier score,
+#' cumulative/dynamic time-dependent AUC, and truncated Uno IPCW concordance.
+#' The three metrics share that one curve but retain separate estimability and
+#' failure status. For time-dependent AUC,
+#' observed events at or before the locked horizon are inverse-censoring-
+#' weighted cases, follow-up strictly beyond it defines controls, censoring at
+#' or before it is excluded, and exact marker ties receive half credit.
+#' Uno C uses the fixed risk score, eligible events strictly before the horizon,
+#' squared inverse censoring weights at those event times, and all comparable
+#' later observations plus same-time censoring; exact risk ties receive half
+#' credit. No replicate refits a model or prediction.
+#' When the locked-horizon survival evaluation contains researcher-declared
+#' decision thresholds, the same sampled patient table also re-estimates event
+#' Kaplan-Meier survival within each threshold-selected group and in the complete
+#' sample. The model, saved survival probabilities, horizon, and thresholds stay
+#' fixed. Paired model-minus-treat-all and model-minus-treat-none differences
+#' are formed within each draw, and type-7 percentile intervals use only finite
+#' successful replicates while retaining explicit unavailable counts. These are
+#' pointwise conditional external-patient sampling intervals, not simultaneous
+#' bands, development-fitting or selection uncertainty, optimism correction,
+#' p values, proof of treatment effectiveness, or a rule for choosing a model
+#' or threshold. They assume independent patients and independent
+#' non-informative censoring within the relevant risk groups. No recalibration,
+#' development refit, or new prediction is performed. Every point calculation
+#' and patient resample
+#' for a binary task also fits one separate three-knot restricted natural cubic
+#' spline logistic moderate-calibration curve to \code{qlogis()} of the fixed class-1
+#' probabilities and reports ICI, E50, and E90 as separate targets. Knot
+#' locations and the curve are re-estimated once per sample; repeated draws
+#' retain their empirical row weight. Exact probabilities zero or one are not
+#' clipped and leave these targets unavailable without erasing other binary
+#' metrics. A complete or quasi-completely separated sample likewise leaves only
+#' these targets unavailable. This curve is never applied as recalibration and
+#' is distinct from the weak-calibration intercept and slope.
+#' For a horizon survival task, every point calculation and patient resample
+#' also fits one three-knot Cox moderate-calibration curve to the fixed survival
+#' probabilities and sampled outcomes, then reports ICI, E50, and E90 as
+#' separate targets. Its knots and curve are re-estimated once per sample;
+#' repeated draws remain distinct row instances. This evaluation fit uses
+#' complete right-censored follow-up, assumes proportional hazards and
+#' independent non-informative censoring, and is read at the locked horizon. It
+#' does not clip or alter predictions, is not applied as recalibration, and is
+#' not itself a survival calibration intercept or slope. Separately, every
+#' locked-horizon point calculation and patient draw reports mean calibration as
+#' Kaplan-Meier observed event probability divided by mean predicted event
+#' probability, and fits an Efron Cox calibration slope after administratively
+#' censoring the endpoint at the horizon. Both target 1 and retain independent
+#' finite/unavailable/non-finite replicate accounting. Exact boundary or
+#' constant predictions can leave only the slope unavailable, while unsupported
+#' Kaplan-Meier horizon follow-up can leave only the mean ratio unavailable. No
+#' probability is clipped or recalibrated, and no survival calibration
+#' intercept, p value, or universal cutoff is produced. These intervals retain
+#' the fixed model and predictions and do not contain development fitting,
+#' feature selection, tuning, OOF, or model-selection uncertainty.
+#' 
+#' Scalar intervals are percentile intervals using finite successful replicate
+#' estimates and R's type-7 empirical quantiles. All unavailable and non-finite
+#' replicates are retained and counted. Bounds based on an incomplete finite
+#' subset are reported as provisional with \code{incomplete} status; no minimum
+#' success fraction is imposed.
+#' 
+#' The resampling unit is one independent patient row. These intervals are not
+#' valid by construction for clustered specimens, repeated measurements,
+#' families, sites, or temporal dependence. They are descriptive for the
+#' supplied sampling frame and do not prove external-cohort independence,
+#' transportability, calibration, clinical utility, adequate sample size,
+#' significance, or a decision threshold. ICI/E50/E90 have no universal
+#' acceptable cutoff. Time-dependent AUC and Uno C are discrimination measures
+#' under the marginal non-informative censoring assumption.
+#' }
+#' 
+#' \subsection{\code{sb_bootstrap_external_comparison()}}{
+#' \code{sb_bootstrap_external_comparison()} estimates paired differences between
+#' every eligible candidate prediction in a completed \code{\link[=sb_compare_external]{sb_compare_external()}}
+#' result and one explicitly named reference prediction. In every bootstrap
+#' replicate, one patient-index vector is drawn and applied unchanged to the
+#' reference and all candidates. Each difference is therefore calculated as
+#' \code{candidate - reference} within the same resampled external patients.
+#' 
+#' \strong{Returns:} A \code{stormbreaker_external_bootstrap_comparison} containing the
+#' reference ID, explicit prediction target, candidate eligibility, shared
+#' resample audit, model-level point and replicate metrics, paired point and
+#' replicate differences, and type-7 percentile intervals for
+#' \code{candidate - reference}.
+#' 
+#' \strong{Details:} The reference must be chosen before inspecting external outcomes. The
+#' function does not choose it, rank candidates, select a winner, or report a
+#' p value. Binary comparisons are limited to ROC AUC, non-interpolated average
+#' precision, Brier score, and unclipped log loss. Survival comparisons use
+#' Harrell C and, when the shared endpoint has a locked horizon, IPCW Brier,
+#' cumulative/dynamic time-dependent AUC, and truncated Uno C. The result labels
+#' whether higher or lower values are preferable; this does not convert the
+#' intervals into a model-selection rule.
+#' 
+#' Every metric is recomputed from fixed, endpoint-aligned predictions in each
+#' ordinary patient bootstrap draw. For horizon survival metrics, the external
+#' marginal censoring distribution is re-estimated inside that draw. Percentile
+#' intervals use finite successful paired differences and retain unavailable
+#' and non-finite counts. They describe independent external-patient sampling
+#' conditional on the locked models and predictions. They do not include
+#' development fitting, feature selection, tuning, model-selection uncertainty,
+#' multiplicity adjustment, transportability, or clinical-effectiveness proof.
+#' 
+#' Calibration and decision-curve contrasts are deliberately outside this
+#' function: a raw difference is not a universal calibration-quality measure,
+#' and model-to-model net-benefit comparison requires common predeclared
+#' thresholds and separate reporting semantics. Use \code{\link[=sb_bootstrap_external]{sb_bootstrap_external()}}
+#' for each model's existing calibration and model-versus-strategy uncertainty.
+#' 
+#' A failed candidate remains in \code{candidate_status} and cannot erase valid
+#' candidate-reference comparisons. A failed reference cannot define shared
+#' contrasts and is rejected.
+#' }
+#' 
+#' \subsection{\code{sb_bootstrap_calibration()}}{
+#' Bootstrap optimism-corrected binary calibration with full pipeline refitting
+#' 
+#' \strong{Returns:} Saved apparent fit, calibration table, pointwise effective replicate
+#' counts, bootstrap differences and failure reasons. Corrected calibration is
+#' apparent minus mean bootstrap training-minus-original calibration.
+#' LOWESS uses span 2/3, zero robustness iterations, linear interpolation and
+#' no extrapolation. Values are not clipped to the unit interval. This is internal
+#' optimism correction, not external validation or a confidence band.
+#' }
+#' 
+#' \subsection{\code{sb_plot_bootstrap_calibration()}}{
+#' Plot saved apparent and optimism-corrected calibration
+#' 
+#' \strong{Returns:} A ggplot. Gaps in correction support remain gaps; no confidence band.
+#' }
+#' 
+#' \subsection{\code{sb_plot_external_intervals()}}{
+#' Read existing uncertainty results without bootstrap resampling, metric
+#' recomputation or model selection.
+#' 
+#' \strong{Returns:} A ggplot object whose data preserves the saved interval endpoints,
+#' availability, confidence level and successful-replicate denominator.
+#' 
+#' \strong{Details:} Intervals describe external-patient sampling conditional on locked
+#' predictions, not development-fitting or model-selection uncertainty.
+#' Partial bootstrap intervals are shown only when the saved object marks
+#' them available, with their partial denominator explicitly labelled.
+#' Missing intervals are never reconstructed from a point estimate. Different
+#' task/metric targets are placed in separate panels. Numerical values and
+#' intervals are not clipped to theoretical metric bounds.
+#' 
+#' Differences retain the saved candidate-minus-reference direction. A
+#' positive difference is favourable only for a higher-is-better metric.
+#' Failed candidates remain visible without invented points. These scalar
+#' interfaces do not flatten nested decision-curve uncertainty results.
+#' }
+#' }
+#' @rawRd \references{
+#' Vickers AJ, Cronin AM, Elkin EB, Gonen M (2008). Extensions to decision
+#' curve analysis. \emph{BMC Medical Informatics and Decision Making}, 8, 53.
+#' \doi{10.1186/1472-6947-8-53}.
+#' 
+#' Vickers AJ et al. (2023). Decision curve analysis: confidence intervals and
+#' hypothesis testing for net benefit. \emph{Diagnostic and Prognostic Research},
+#' 7, 11. \doi{10.1186/s41512-023-00148-y}.
+#' 
+#' McLernon DJ, Giardiello D, Van Calster B, et al. (2023). Assessing
+#' performance and clinical usefulness in prediction models with survival
+#' outcomes: practical guidance for Cox proportional hazards models.
+#' \emph{Annals of Internal Medicine}, 176(1), 105-114.
+#' \doi{10.7326/M22-0844}.
+#' 
+#' Uno H, Cai T, Pencina MJ, D'Agostino RB, Wei LJ (2011). On the C-statistics
+#' for evaluating overall adequacy of risk prediction procedures with
+#' censored survival data. \emph{Statistics in Medicine}, 30(10), 1105-1117.
+#' \doi{10.1002/sim.4154}.
+#' }
+#' @rawRd \examples{
+#' # sb_bootstrap_external
+#' development <- sb_example_binary(n = 30, seed = 1)
+#' task <- sb_binary_task(
+#'   development, "patient_id", "outcome", c("gene_a", "gene_b"),
+#'   decision_thresholds = c(0.2, 0.5, 0.8)
+#' )
+#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
+#' external <- sb_example_binary(n = 12, seed = 2)
+#' external$patient_id <- paste0("external_", seq_len(nrow(external)))
+#' prediction <- sb_predict_final(
+#'   fit,
+#'   external[c("patient_id", "gene_a", "gene_b")],
+#'   "patient_id"
+#' )
+#' endpoint <- sb_binary_endpoint(external, "patient_id", "outcome")
+#' evaluation <- sb_evaluate_external(prediction, endpoint)
+#' uncertainty <- sb_bootstrap_external(evaluation, reps = 20, seed = 3)
+#' uncertainty$decision_curve$intervals
+#' 
+#' # sb_bootstrap_external_comparison
+#' development <- sb_example_binary(n = 50, seed = 1)
+#' task <- sb_binary_task(
+#'   development,
+#'   "patient_id",
+#'   "outcome",
+#'   c("gene_a", "gene_b", "gene_c")
+#' )
+#' pipelines <- list(
+#'   sb_pipeline(learner = "logistic"),
+#'   sb_pipeline(learner = "gaussian_naive_bayes")
+#' )
+#' fits <- lapply(pipelines, function(pipeline) {
+#'   sb_fit_final(task, pipeline)
+#' })
+#' external <- sb_example_binary(n = 30, seed = 2)
+#' external$patient_id <- paste0("external_", external$patient_id)
+#' predictions <- lapply(fits, function(fit) {
+#'   sb_predict_final(
+#'     fit,
+#'     external[c("patient_id", "gene_a", "gene_b", "gene_c")],
+#'     "patient_id"
+#'   )
+#' })
+#' endpoint <- sb_binary_endpoint(external, "patient_id", "outcome")
+#' comparison <- sb_compare_external(predictions, endpoint)
+#' paired <- sb_bootstrap_external_comparison(
+#'   comparison,
+#'   reference_pipeline_id = predictions[[1L]]$pipeline_id,
+#'   reps = 20,
+#'   seed = 3
+#' )
+#' paired$intervals
+#' }
+NULL
+
+# ---- external-bootstrap ----
+
 sb_external_bootstrap_empty_point_estimates <- function() {
   data.frame(
     metric = character(),
@@ -1012,173 +1353,8 @@ sb_external_percentile_intervals <- function(
   result
 }
 
-#' Bootstrap uncertainty for a completed external evaluation
-#'
-#' `sb_bootstrap_external()` applies an ordinary nonparametric patient
-#' bootstrap to the paired endpoint and precomputed prediction rows already
-#' stored by [sb_evaluate_external()]. The fitted model and every supplied
-#' prediction remain fixed. The result therefore describes external-patient
-#' sampling uncertainty conditional on that locked model and those predictions;
-#' it does not include uncertainty from development fitting, feature selection,
-#' tuning, or model selection.
-#' For survival, `prediction_target` separately retains the endpoint time unit,
-#' whether a prediction horizon is present, its value when present, and whether
-#' that effective horizon came from the endpoint or the locked prediction. A
-#' risk-only evaluation is recorded as horizon-free rather than assigned a
-#' surrogate time point.
-#'
-#' Binary replicates recompute ROC AUC, non-interpolated average precision,
-#' Brier score, unclipped log loss, observed-to-expected mean calibration, and
-#' separate calibration intercept and slope targets. Mean calibration may be
-#' zero when a draw contains no observed events and is unavailable when its
-#' expected event count is zero or its ratio is numerically non-finite; no
-#' clipping or continuity correction is applied. When the source binary
-#' evaluation contains researcher-declared
-#' decision thresholds, the same sampled patient table also recomputes model,
-#' treat-all, and treat-none net benefit. An optional nested decision-curve
-#' result retains the raw counts, threshold operating characteristics, and
-#' curves, then reports type-7 percentile
-#' intervals for the paired differences of model minus treat-all and model
-#' minus treat-none. Model minus treat-all is calculated directly from true
-#' negatives and false negatives rather than by subtracting two potentially
-#' large, nearly equal net-benefit values. These intervals are pointwise at the
-#' declared thresholds, not simultaneous coverage for the curve as a whole.
-#' They provide no p value, threshold recommendation, automatic decision, or
-#' proof of clinical effectiveness. They are not confidence intervals for the
-#' threshold operating characteristics. Scalar target tables remain separate
-#' from the nested decision-curve result. Survival replicates recompute pooled
-#' Harrell C. For
-#' a locked-horizon
-#' survival prediction, every replicate also refits only its external marginal
-#' reverse Kaplan-Meier censoring curve before recomputing IPCW Brier score,
-#' cumulative/dynamic time-dependent AUC, and truncated Uno IPCW concordance.
-#' The three metrics share that one curve but retain separate estimability and
-#' failure status. For time-dependent AUC,
-#' observed events at or before the locked horizon are inverse-censoring-
-#' weighted cases, follow-up strictly beyond it defines controls, censoring at
-#' or before it is excluded, and exact marker ties receive half credit.
-#' Uno C uses the fixed risk score, eligible events strictly before the horizon,
-#' squared inverse censoring weights at those event times, and all comparable
-#' later observations plus same-time censoring; exact risk ties receive half
-#' credit. No replicate refits a model or prediction.
-#' When the locked-horizon survival evaluation contains researcher-declared
-#' decision thresholds, the same sampled patient table also re-estimates event
-#' Kaplan-Meier survival within each threshold-selected group and in the complete
-#' sample. The model, saved survival probabilities, horizon, and thresholds stay
-#' fixed. Paired model-minus-treat-all and model-minus-treat-none differences
-#' are formed within each draw, and type-7 percentile intervals use only finite
-#' successful replicates while retaining explicit unavailable counts. These are
-#' pointwise conditional external-patient sampling intervals, not simultaneous
-#' bands, development-fitting or selection uncertainty, optimism correction,
-#' p values, proof of treatment effectiveness, or a rule for choosing a model
-#' or threshold. They assume independent patients and independent
-#' non-informative censoring within the relevant risk groups. No recalibration,
-#' development refit, or new prediction is performed. Every point calculation
-#' and patient resample
-#' for a binary task also fits one separate three-knot restricted natural cubic
-#' spline logistic moderate-calibration curve to `qlogis()` of the fixed class-1
-#' probabilities and reports ICI, E50, and E90 as separate targets. Knot
-#' locations and the curve are re-estimated once per sample; repeated draws
-#' retain their empirical row weight. Exact probabilities zero or one are not
-#' clipped and leave these targets unavailable without erasing other binary
-#' metrics. A complete or quasi-completely separated sample likewise leaves only
-#' these targets unavailable. This curve is never applied as recalibration and
-#' is distinct from the weak-calibration intercept and slope.
-#' For a horizon survival task, every point calculation and patient resample
-#' also fits one three-knot Cox moderate-calibration curve to the fixed survival
-#' probabilities and sampled outcomes, then reports ICI, E50, and E90 as
-#' separate targets. Its knots and curve are re-estimated once per sample;
-#' repeated draws remain distinct row instances. This evaluation fit uses
-#' complete right-censored follow-up, assumes proportional hazards and
-#' independent non-informative censoring, and is read at the locked horizon. It
-#' does not clip or alter predictions, is not applied as recalibration, and is
-#' not itself a survival calibration intercept or slope. Separately, every
-#' locked-horizon point calculation and patient draw reports mean calibration as
-#' Kaplan-Meier observed event probability divided by mean predicted event
-#' probability, and fits an Efron Cox calibration slope after administratively
-#' censoring the endpoint at the horizon. Both target 1 and retain independent
-#' finite/unavailable/non-finite replicate accounting. Exact boundary or
-#' constant predictions can leave only the slope unavailable, while unsupported
-#' Kaplan-Meier horizon follow-up can leave only the mean ratio unavailable. No
-#' probability is clipped or recalibrated, and no survival calibration
-#' intercept, p value, or universal cutoff is produced. These intervals retain
-#' the fixed model and predictions and do not contain development fitting,
-#' feature selection, tuning, OOF, or model-selection uncertainty.
-#'
-#' Scalar intervals are percentile intervals using finite successful replicate
-#' estimates and R's type-7 empirical quantiles. All unavailable and non-finite
-#' replicates are retained and counted. Bounds based on an incomplete finite
-#' subset are reported as provisional with `incomplete` status; no minimum
-#' success fraction is imposed.
-#'
-#' The resampling unit is one independent patient row. These intervals are not
-#' valid by construction for clustered specimens, repeated measurements,
-#' families, sites, or temporal dependence. They are descriptive for the
-#' supplied sampling frame and do not prove external-cohort independence,
-#' transportability, calibration, clinical utility, adequate sample size,
-#' significance, or a decision threshold. ICI/E50/E90 have no universal
-#' acceptable cutoff. Time-dependent AUC and Uno C are discrimination measures
-#' under the marginal non-informative censoring assumption.
-#'
-#' @references
-#' Vickers AJ, Cronin AM, Elkin EB, Gonen M (2008). Extensions to decision
-#'   curve analysis. *BMC Medical Informatics and Decision Making*, 8, 53.
-#'   \doi{10.1186/1472-6947-8-53}.
-#'
-#' Vickers AJ et al. (2023). Decision curve analysis: confidence intervals and
-#'   hypothesis testing for net benefit. *Diagnostic and Prognostic Research*,
-#'   7, 11. \doi{10.1186/s41512-023-00148-y}.
-#'
-#' McLernon DJ, Giardiello D, Van Calster B, et al. (2023). Assessing
-#'   performance and clinical usefulness in prediction models with survival
-#'   outcomes: practical guidance for Cox proportional hazards models.
-#'   *Annals of Internal Medicine*, 176(1), 105-114.
-#'   \doi{10.7326/M22-0844}.
-#'
-#' Uno H, Cai T, Pencina MJ, D'Agostino RB, Wei LJ (2011). On the C-statistics
-#'   for evaluating overall adequacy of risk prediction procedures with
-#'   censored survival data. *Statistics in Medicine*, 30(10), 1105-1117.
-#'   \doi{10.1002/sim.4154}.
-#'
-#' @param evaluation A successful or incomplete
-#'   `stormbreaker_external_evaluation` returned by [sb_evaluate_external()].
-#' @param reps Number of ordinary patient-level bootstrap replicates. Must be an
-#'   integer of at least 2. Defaults to 1000.
-#' @param confidence_level Percentile interval confidence level strictly between
-#'   0 and 1. Defaults to 0.95.
-#' @param seed Positive integer seed. Reproducibility requires the same input,
-#'   R version, and RNG kinds. The caller's random state is restored.
-#'
-#' @return A `stormbreaker_external_bootstrap` containing recomputed point
-#'   targets, every target-by-replicate estimate and status, percentile
-#'   intervals, the effective `prediction_target`, replicate accounting,
-#'   resampling semantics, and provenance.
-#'   Binary and locked-horizon survival scalar targets include
-#'   observed/expected mean calibration; locked-horizon survival also includes
-#'   Uno C and calibration slope as separate rows.
-#'   Threshold-enabled binary and locked-horizon survival evaluations
-#'   additionally contain a nested `decision_curve` component with raw
-#'   replicate curves and paired pointwise net-benefit-difference intervals.
+#' @rdname sb_bootstrap_external
 #' @export
-#'
-#' @examples
-#' development <- sb_example_binary(n = 30, seed = 1)
-#' task <- sb_binary_task(
-#'   development, "patient_id", "outcome", c("gene_a", "gene_b"),
-#'   decision_thresholds = c(0.2, 0.5, 0.8)
-#' )
-#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
-#' external <- sb_example_binary(n = 12, seed = 2)
-#' external$patient_id <- paste0("external_", seq_len(nrow(external)))
-#' prediction <- sb_predict_final(
-#'   fit,
-#'   external[c("patient_id", "gene_a", "gene_b")],
-#'   "patient_id"
-#' )
-#' endpoint <- sb_binary_endpoint(external, "patient_id", "outcome")
-#' evaluation <- sb_evaluate_external(prediction, endpoint)
-#' uncertainty <- sb_bootstrap_external(evaluation, reps = 20, seed = 3)
-#' uncertainty$decision_curve$intervals
 sb_bootstrap_external <- function(
     evaluation,
     reps = 1000L,
@@ -1388,4 +1564,476 @@ print.stormbreaker_external_bootstrap <- function(x, ...) {
     }
   }
   invisible(x)
+}
+
+# ---- external-bootstrap-curves ----
+
+# ---- bootstrap-calibration ----
+
+sb_calibration_smooth <- function(y, probability, grid) {
+  if (length(unique(probability)) < 2L) stop("Calibration needs at least two distinct predictions.")
+  curve <- stats::lowess(probability, y, f = 2/3, iter = 0)
+  stats::approx(curve$x, curve$y, xout = grid, ties = mean, rule = 1)$y
+}
+
+sb_calibration_predict <- function(fit, task) {
+  if (!identical(fit$status, "success")) stop(fit$error_message)
+  prediction <- sb_predict_final(fit, task$data[c(task$id_col, task$predictors)], task$id_col)
+  if (!identical(prediction$status, "success")) stop(prediction$error_message)
+  prediction$predictions$probability
+}
+
+#' @rdname sb_bootstrap_external
+#' @export
+sb_bootstrap_calibration <- function(task, pipeline, reps = 1000L, seed = 1L, grid = NULL) {
+  task <- sb_validate_binary_task_contract(task)
+  if (!is.null(task$group_col)) stop("Use one independent patient per row; grouped bootstrap is not implemented.")
+  reps <- sb_viz_positive_integer(reps, "reps")
+  if (reps < 2L) stop("Use at least two bootstrap replicates.")
+  withr::local_seed(seed)
+  fit <- sb_fit_final(task, pipeline)
+  p <- sb_calibration_predict(fit, task)
+  y <- task$data[[task$outcome_col]]
+  if (is.null(grid)) grid <- seq(stats::quantile(p, .05), stats::quantile(p, .95), length.out = 80)
+  if (!is.numeric(grid) || length(grid) < 2L || any(!is.finite(grid)) ||
+      any(grid <= 0 | grid >= 1) || any(diff(grid) <= 0)) stop("grid must increase strictly inside (0,1).")
+  apparent <- sb_calibration_smooth(y, p, grid)
+  differences <- matrix(NA_real_, reps, length(grid))
+  status <- data.frame(replicate = seq_len(reps), status = "failed", reason = "")
+  group_col <- make.unique(c(names(task$data), ".bootstrap_patient"))[ncol(task$data) + 1L]
+  for (b in seq_len(reps)) {
+    result <- tryCatch({
+      i <- sample.int(task$n, task$n, replace = TRUE)
+      d <- task$data[i, , drop = FALSE]
+      d[[group_col]] <- as.character(d[[task$id_col]])
+      d[[task$id_col]] <- paste0("boot_", seq_len(nrow(d)))
+      boot <- sb_binary_task(d, task$id_col, task$outcome_col, task$predictors,
+        decision_thresholds = task$decision_thresholds, group_col = group_col)
+      f <- sb_fit_final(boot, pipeline)
+      train <- sb_calibration_predict(f, boot)
+      original <- sb_calibration_predict(f, task)
+      sb_calibration_smooth(d[[task$outcome_col]], train, grid) -
+        sb_calibration_smooth(y, original, grid)
+    }, error = identity)
+    if (inherits(result, "error")) status$reason[b] <- conditionMessage(result) else {
+      differences[b, ] <- result
+      status$status[b] <- if (any(is.finite(result))) "success" else "failed"
+      if (status$status[b] == "failed") status$reason[b] <- "No overlapping calibration support."
+    }
+  }
+  effective <- colSums(is.finite(differences))
+  optimism <- colMeans(differences, na.rm = TRUE)
+  optimism[effective < 2L] <- NA_real_
+  table <- data.frame(probability = grid, apparent = apparent,
+    optimism = optimism, corrected = apparent - optimism, effective_reps = effective)
+  structure(list(fit = fit, curve = table, replicates = differences, status = status,
+    requested_reps = reps, seed = seed, n = task$n,
+    smoother = "LOWESS f=2/3 iter=0; no extrapolation"),
+    class = "stormbreaker_bootstrap_calibration")
+}
+
+#' @rdname sb_bootstrap_external
+#' @export
+sb_plot_bootstrap_calibration <- function(x) {
+  if (!inherits(x, "stormbreaker_bootstrap_calibration")) stop("Supply sb_bootstrap_calibration output.")
+  sb_require_curve_plotting()
+  d <- rbind(data.frame(x = x$curve$probability, y = x$curve$apparent, curve = "Apparent"),
+    data.frame(x = x$curve$probability, y = x$curve$corrected, curve = "Bias-corrected"))
+  y <- curve <- NULL
+  p <- ggplot2::ggplot(d, ggplot2::aes(x, y, linetype = curve)) +
+    ggplot2::geom_line(linewidth = .7, na.rm = TRUE) +
+    ggplot2::geom_abline(intercept = 0, slope = 1, colour = "grey60", linetype = 3) +
+    ggplot2::scale_linetype_manual(values = c(Apparent = 2, `Bias-corrected` = 1)) +
+    ggplot2::labs(title = "Calibration", x = "Predicted probability", y = "Observed proportion", linetype = NULL) +
+    sb_viz_theme() + ggplot2::theme(legend.position = "bottom")
+  attr(p, "calibration_diagnostics") <- x[c("status", "requested_reps", "smoother")]
+  p
+}
+
+# ---- external-bootstrap-decision-curve ----
+
+sb_external_bootstrap_decision_thresholds <- function(evaluation) {
+  metrics <- evaluation[["metrics"]]
+  if (!is.list(metrics) || !"decision_curve" %in% names(metrics)) {
+    return(NULL)
+  }
+  decision_curve <- metrics[["decision_curve"]]
+  if (!is.list(decision_curve)) {
+    sb_abort(
+      "The external decision-curve evidence is malformed.",
+      "stormbreaker_bad_external_evaluation"
+    )
+  }
+  curve <- decision_curve[["curve"]]
+  if (!is.data.frame(curve)) {
+    sb_abort(
+      "The external decision-curve evidence is malformed.",
+      "stormbreaker_bad_external_evaluation"
+    )
+  }
+  positions <- which(names(curve) == "threshold_probability")
+  if (length(positions) != 1L) {
+    sb_abort(
+      "The external decision-curve threshold column is missing or duplicated.",
+      "stormbreaker_bad_external_evaluation"
+    )
+  }
+  sb_validate_decision_thresholds(curve[[positions]])
+}
+
+sb_external_bootstrap_decision_curve_comparisons <- function(curve) {
+  curve$model_minus_treat_all <-
+    (curve$true_negative * curve$threshold_odds -
+       curve$false_negative) / curve$n
+  curve$model_minus_treat_none <- curve$model_net_benefit
+  curve
+}
+
+sb_external_bootstrap_decision_curve_replicate <- function(
+    scored,
+    decision_thresholds,
+    replicate) {
+  metric <- sb_binary_decision_curve_metric(
+    scored,
+    decision_thresholds,
+    scope = "patient_level_external_bootstrap_sample"
+  )
+  curve <- sb_external_bootstrap_decision_curve_comparisons(metric$curve)
+  data.frame(
+    replicate = rep.int(as.integer(replicate), nrow(curve)),
+    curve,
+    stringsAsFactors = FALSE
+  )
+}
+
+sb_external_bootstrap_decision_point_comparisons <- function(curve) {
+  data.frame(
+    threshold_probability = curve$threshold_probability,
+    threshold_odds = curve$threshold_odds,
+    model_minus_treat_all = curve$model_minus_treat_all,
+    model_minus_treat_none = curve$model_minus_treat_none,
+    stringsAsFactors = FALSE
+  )
+}
+
+sb_external_bootstrap_decision_intervals <- function(
+    point_comparisons,
+    replicate_curves,
+    confidence_level,
+    reps) {
+  probabilities <- sb_external_bootstrap_interval_method(
+    confidence_level
+  )$probabilities
+  comparison_targets <- c(
+    "model_minus_treat_all",
+    "model_minus_treat_none"
+  )
+  rows <- lapply(seq_len(nrow(point_comparisons)), function(index) {
+    threshold <- point_comparisons$threshold_probability[[index]]
+    replicate_rows <-
+      replicate_curves$threshold_probability == threshold
+    lapply(comparison_targets, function(comparison) {
+      bounds <- stats::quantile(
+        replicate_curves[[comparison]][replicate_rows],
+        probs = probabilities,
+        names = FALSE,
+        type = 7
+      )
+      data.frame(
+        threshold_probability = threshold,
+        threshold_odds = point_comparisons$threshold_odds[[index]],
+        comparison = comparison,
+        point_estimate = point_comparisons[[comparison]][[index]],
+        lower = unname(bounds[[1L]]),
+        upper = unname(bounds[[2L]]),
+        confidence_level = confidence_level,
+        n_requested = as.integer(reps),
+        stringsAsFactors = FALSE
+      )
+    })
+  })
+  result <- do.call(rbind, unlist(rows, recursive = FALSE))
+  rownames(result) <- NULL
+  result
+}
+
+sb_external_bootstrap_decision_curve_result <- function(
+    scored,
+    decision_thresholds,
+    replicate_curves,
+    confidence_level,
+    reps) {
+  point_metric <- sb_binary_decision_curve_metric(
+    scored,
+    decision_thresholds,
+    scope = "patient_level_external_bootstrap_point"
+  )
+  point_curve <- sb_external_bootstrap_decision_curve_comparisons(
+    point_metric$curve
+  )
+  point_comparisons <- sb_external_bootstrap_decision_point_comparisons(
+    point_curve
+  )
+  list(
+    status = "success",
+    scope = "paired_patient_bootstrap_external_decision_curve",
+    interval_scope = "pointwise_not_simultaneous",
+    comparison_targets = c(
+      "model_minus_treat_all",
+      "model_minus_treat_none"
+    ),
+    n_thresholds = as.integer(length(decision_thresholds)),
+    point_curve = point_curve,
+    point_comparisons = point_comparisons,
+    intervals = sb_external_bootstrap_decision_intervals(
+      point_comparisons,
+      replicate_curves,
+      confidence_level,
+      reps
+    ),
+    replicates = replicate_curves
+  )
+}
+
+# ---- external-bootstrap-survival-decision-curve ----
+
+sb_external_bootstrap_survival_decision_curve_comparisons <- function(metric) {
+  curve <- data.frame(
+    threshold_index = seq_len(nrow(metric$curve)),
+    metric$curve,
+    stringsAsFactors = FALSE
+  )
+  curve$overall_horizon_support <- metric$overall_horizon_support
+  curve$overall_max_follow_up <- metric$overall_max_follow_up
+  curve$overall_survival_probability <-
+    metric$overall_survival_probability
+  curve$overall_event_probability <- metric$overall_event_probability
+
+  all_selected <- !is.na(curve$n_selected) &
+    !is.na(curve$n) & curve$n_selected == curve$n
+  none_selected <- !is.na(curve$n_selected) & curve$n_selected == 0L
+  model_finite <- is.finite(curve$model_net_benefit)
+  all_finite <- is.finite(curve$treat_all_net_benefit)
+
+  model_minus_all <- rep.int(NA_real_, nrow(curve))
+  model_minus_all[all_selected] <- 0
+  ordinary_all <- !all_selected & model_finite & all_finite
+  model_minus_all[ordinary_all] <-
+    (curve$estimated_true_positive_rate[ordinary_all] -
+       curve$overall_event_probability[ordinary_all]) -
+    (curve$estimated_false_positive_rate[ordinary_all] -
+       curve$overall_survival_probability[ordinary_all]) *
+    curve$threshold_odds[ordinary_all]
+
+  model_minus_none <- rep.int(NA_real_, nrow(curve))
+  model_minus_none[none_selected] <- 0
+  ordinary_none <- !none_selected & model_finite
+  model_minus_none[ordinary_none] <- curve$model_net_benefit[ordinary_none]
+
+  all_success <- is.finite(model_minus_all)
+  none_success <- is.finite(model_minus_none)
+  curve$model_minus_treat_all <- model_minus_all
+  curve$model_minus_treat_none <- model_minus_none
+  curve$model_minus_treat_all_status <- ifelse(
+    all_success,
+    "success",
+    "not_evaluable"
+  )
+  curve$model_minus_treat_none_status <- ifelse(
+    none_success,
+    "success",
+    "not_evaluable"
+  )
+  curve$model_minus_treat_all_error_class <- ifelse(
+    all_success,
+    NA_character_,
+    curve$error_class
+  )
+  curve$model_minus_treat_all_error_message <- ifelse(
+    all_success,
+    NA_character_,
+    curve$error_message
+  )
+  curve$model_minus_treat_none_error_class <- ifelse(
+    none_success,
+    NA_character_,
+    curve$error_class
+  )
+  curve$model_minus_treat_none_error_message <- ifelse(
+    none_success,
+    NA_character_,
+    curve$error_message
+  )
+  curve
+}
+
+sb_external_bootstrap_survival_decision_curve_replicate <- function(
+    scored,
+    decision_thresholds,
+    replicate) {
+  metric <- sb_survival_decision_curve_metric(
+    scored,
+    decision_thresholds,
+    prediction_horizon = scored$prediction_horizon[[1L]],
+    time_unit = scored$time_unit[[1L]],
+    scope = "patient_level_external_bootstrap_sample"
+  )
+  curve <- sb_external_bootstrap_survival_decision_curve_comparisons(
+    metric
+  )
+  data.frame(
+    replicate = rep.int(as.integer(replicate), nrow(curve)),
+    curve,
+    stringsAsFactors = FALSE
+  )
+}
+
+sb_external_bootstrap_survival_decision_point_comparisons <- function(curve) {
+  comparisons <- c(
+    "model_minus_treat_all",
+    "model_minus_treat_none"
+  )
+  rows <- lapply(seq_len(nrow(curve)), function(index) {
+    do.call(rbind, lapply(comparisons, function(comparison) {
+      data.frame(
+        threshold_index = curve$threshold_index[[index]],
+        threshold_probability = curve$threshold_probability[[index]],
+        threshold_odds = curve$threshold_odds[[index]],
+        comparison = comparison,
+        estimate = curve[[comparison]][[index]],
+        status = curve[[paste0(comparison, "_status")]][[index]],
+        error_class = curve[[
+          paste0(comparison, "_error_class")
+        ]][[index]],
+        error_message = curve[[
+          paste0(comparison, "_error_message")
+        ]][[index]],
+        stringsAsFactors = FALSE
+      )
+    }))
+  })
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
+}
+
+sb_external_bootstrap_survival_decision_intervals <- function(
+    point_comparisons,
+    replicate_curves,
+    confidence_level,
+    reps) {
+  metric_key <- paste0(
+    "survival_dca_",
+    point_comparisons$threshold_index,
+    "_",
+    point_comparisons$comparison
+  )
+  point <- data.frame(
+    metric = metric_key,
+    estimate = point_comparisons$estimate,
+    status = point_comparisons$status,
+    error_class = point_comparisons$error_class,
+    error_message = point_comparisons$error_message,
+    stringsAsFactors = FALSE
+  )
+  replicate_rows <- lapply(seq_len(nrow(point_comparisons)), function(index) {
+    comparison <- point_comparisons$comparison[[index]]
+    selected <- replicate_curves$threshold_index ==
+      point_comparisons$threshold_index[[index]]
+    rows <- replicate_curves[selected, , drop = FALSE]
+    data.frame(
+      replicate = rows$replicate,
+      metric = rep.int(metric_key[[index]], nrow(rows)),
+      estimate = rows[[comparison]],
+      status = rows[[paste0(comparison, "_status")]],
+      error_class = rows[[paste0(comparison, "_error_class")]],
+      error_message = rows[[paste0(comparison, "_error_message")]],
+      stringsAsFactors = FALSE
+    )
+  })
+  replicates <- do.call(rbind, replicate_rows)
+  rownames(replicates) <- NULL
+  intervals <- sb_external_percentile_intervals(
+    point,
+    replicates,
+    confidence_level,
+    reps
+  )
+  result <- data.frame(
+    threshold_index = point_comparisons$threshold_index,
+    threshold_probability = point_comparisons$threshold_probability,
+    threshold_odds = point_comparisons$threshold_odds,
+    comparison = point_comparisons$comparison,
+    intervals[, setdiff(names(intervals), "metric"), drop = FALSE],
+    stringsAsFactors = FALSE
+  )
+  target <- paste0(
+    "`", result$comparison, "` at threshold ",
+    format(result$threshold_probability, trim = TRUE)
+  )
+  too_few <- !is.na(result$error_class) &
+    result$error_class == "stormbreaker_insufficient_bootstrap_replicates"
+  result$error_message[too_few] <- paste0(
+    "At least two finite successful bootstrap replicates are required for ",
+    target[too_few], "."
+  )
+  partial <- !is.na(result$error_class) &
+    result$error_class == "stormbreaker_incomplete_bootstrap_replicates"
+  result$error_message[partial] <- paste0(
+    "The displayed interval for ", target[partial],
+    " uses only its finite successful replicates."
+  )
+  rownames(result) <- NULL
+  result
+}
+
+sb_external_bootstrap_survival_decision_curve_result <- function(
+    scored,
+    decision_thresholds,
+    replicate_curves,
+    confidence_level,
+    reps) {
+  prediction_horizon <- scored$prediction_horizon[[1L]]
+  time_unit <- scored$time_unit[[1L]]
+  point_metric <- sb_survival_decision_curve_metric(
+    scored,
+    decision_thresholds,
+    prediction_horizon,
+    time_unit,
+    scope = "patient_level_external_bootstrap_point"
+  )
+  point_curve <-
+    sb_external_bootstrap_survival_decision_curve_comparisons(point_metric)
+  point_comparisons <-
+    sb_external_bootstrap_survival_decision_point_comparisons(point_curve)
+  intervals <- sb_external_bootstrap_survival_decision_intervals(
+    point_comparisons,
+    replicate_curves,
+    confidence_level,
+    reps
+  )
+  complete <- nrow(intervals) >= 1L &&
+    all(intervals$status == "success")
+  list(
+    status = if (complete) "success" else "incomplete",
+    task_type = "survival",
+    scope = "paired_patient_bootstrap_external_survival_decision_curve",
+    interval_scope = "pointwise_not_simultaneous",
+    event_probability_estimator = paste0(
+      "kaplan_meier_within_threshold_selected_group_each_resample"
+    ),
+    prediction = "fixed",
+    threshold_source = "study_declared_survival_task",
+    comparison_targets = c(
+      "model_minus_treat_all",
+      "model_minus_treat_none"
+    ),
+    prediction_horizon = prediction_horizon,
+    time_unit = time_unit,
+    n_thresholds = as.integer(length(decision_thresholds)),
+    point_curve = point_curve,
+    point_comparisons = point_comparisons,
+    intervals = intervals,
+    replicates = replicate_curves
+  )
 }

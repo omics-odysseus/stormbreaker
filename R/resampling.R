@@ -1,3 +1,5 @@
+# ---- resampling ----
+
 sb_validate_group_ids <- function(group_ids, n) {
   valid <- is.atomic(group_ids) && is.null(dim(group_ids)) &&
     length(group_ids) == n && !anyNA(group_ids) &&
@@ -32,6 +34,70 @@ sb_validate_group_column <- function(data, group_col, endpoint_cols,
 sb_task_group_ids <- function(task, rows = seq_len(task$n)) {
   if (is.null(task$group_col)) return(NULL)
   as.character(task$data[[task$group_col]][rows])
+}
+
+#' @rdname sb_binary_task
+#' @export
+sb_split_binary <- function(task, train_prop = 0.7, seed = 1L) {
+  if (!inherits(task, "stormbreaker_binary_task")) {
+    sb_abort("Supply a binary task.", "stormbreaker_bad_task")
+  }
+  task <- sb_validate_binary_task_contract(task)
+  if (!is.numeric(train_prop) || length(train_prop) != 1L ||
+      !is.finite(train_prop) || train_prop <= 0 || train_prop >= 1) {
+    sb_abort("train_prop must lie strictly between 0 and 1.",
+      "stormbreaker_bad_split_proportion")
+  }
+  seed <- sb_check_positive_integer(seed, "seed", minimum = 1L)
+  ids <- as.character(task$data[[task$id_col]])
+  group <- sb_task_group_ids(task)
+  if (is.null(group)) group <- ids
+  group_index <- match(group, unique(group))
+  y <- as.integer(task$data[[task$outcome_col]])
+  n_groups <- max(group_index)
+  has_0 <- tabulate(group_index[y == 0L], n_groups) > 0L
+  has_1 <- tabulate(group_index[y == 1L], n_groups) > 0L
+  strata <- split(seq_len(n_groups), factor(has_0 + 2L * has_1, levels = 1:3))
+  n <- unname(lengths(strata))
+  at_least <- as.integer(n >= 2L)
+  target <- pmax(at_least, pmin(n - at_least, floor(train_prop * n + 0.5)))
+
+  # Unsplittable singleton strata can go to either side. Among the feasible
+  # allocations choose the one closest to the target number of groups.
+  choices <- lapply(seq_along(n), function(i) if (n[i] == 1L) 0:1 else target[i])
+  candidates <- as.matrix(expand.grid(choices, KEEP.OUT.ATTRS = FALSE))
+  has_both <- function(counts) {
+    (counts[, 1L] + counts[, 3L] > 0) & (counts[, 2L] + counts[, 3L] > 0)
+  }
+  feasible <- has_both(candidates) &
+    has_both(matrix(n, nrow(candidates), 3L, byrow = TRUE) - candidates)
+  if (!any(feasible)) {
+    sb_abort("Both partitions need both outcomes in disjoint patient groups.",
+      "stormbreaker_insufficient_split_groups")
+  }
+  candidates <- candidates[feasible, , drop = FALSE]
+  counts <- candidates[which.min(abs(rowSums(candidates) - train_prop * n_groups)), ]
+  development_groups <- withr::with_seed(seed, unlist(Map(function(g, size) {
+    if (size == 0) return(integer())
+    g[sample.int(length(g), size)]
+  }, strata, as.integer(counts)), use.names = FALSE))
+  is_development <- group_index %in% development_groups
+  role <- ifelse(is_development, "development", "assessment")
+  development <- sb_binary_task(task$data[is_development, , drop = FALSE],
+    task$id_col, task$outcome_col, task$predictors,
+    decision_thresholds = task$decision_thresholds, group_col = task$group_col)
+  summary <- do.call(rbind, lapply(c("development", "assessment"), function(part) {
+    rows <- role == part
+    data.frame(role = part, n_groups = length(unique(group[rows])),
+      n_rows = sum(rows), n_negative = sum(y[rows] == 0L),
+      n_positive = sum(y[rows] == 1L))
+  }))
+  assessment <- task$data[!is_development, , drop = FALSE]
+  attr(assessment, "stormbreaker_assessment_role") <- "internal_holdout"
+  list(development = development, assessment = assessment,
+    assignment = data.frame(observation_id = ids, group_id = group,
+      outcome = y, role = role),
+    counts = summary, train_prop = train_prop, seed = seed)
 }
 
 sb_make_group_stratified_fold_id <- function(event, group_ids, folds, seed,

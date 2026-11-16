@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>模型比较 · stormbreaker</title>
+<title>Model comparison · stormbreaker</title>
 <style>
 :root{--ink:#21332f;--muted:#65746e;--line:#dce3df;--accent:#176b58;--paper:#fff;--wash:#f4f6f3;--soft:#eaf3ee}
 *{box-sizing:border-box}body{margin:0;background:var(--wash);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
@@ -53,71 +53,71 @@ dialog table{margin-top:20px;table-layout:auto;font-size:13px}dialog th{position
 <body>
 <main>
 <header>
-  <div><div class="brand">STORMBREAKER</div><h1 id="page-title">模型比较</h1><div id="summary" class="muted"></div></div>
+  <div><div class="brand">STORMBREAKER</div><h1 id="page-title">Model comparison</h1><div id="summary" class="muted"></div></div>
   <div class="actions">
-    <button id="import-button">导入结果</button>
-    <button id="csv-button">导出表格</button>
-    <button id="svg-button">导出图 SVG</button>
-    <button id="print-button">打印 / PDF</button>
+    <button id="import-button">Import results</button>
+    <button id="csv-button">Export table</button>
+    <button id="svg-button">Export SVG</button>
+    <button id="print-button">Print / PDF</button>
   </div>
 </header>
 <input id="file-input" type="file" accept=".csv,text/csv" multiple hidden>
 <div id="notice" class="notice" role="status" hidden></div>
-<section class="toolbar" aria-label="结果筛选">
+<section class="toolbar" aria-label="Result filters">
   <div class="filters">
-    <label class="control">任务<select id="task"><option value="binary">二分类</option><option value="survival">生存预测</option></select></label>
-    <label class="control">指标<select id="metric"></select></label>
-    <label class="control" id="horizon-control" hidden>预测时点<select id="horizon"></select></label>
-    <label class="control">排序依据<select id="sort"></select></label>
-    <label class="control">显示<select id="limit"><option value="10">前 10</option><option value="20" selected>前 20</option><option value="50">前 50</option><option value="100">前 100</option><option value="all">全部</option></select></label>
-    <label class="control grow">搜索<input id="search" type="search" placeholder="算法或筛选方法" aria-label="搜索算法或筛选方法"></label>
+    <label class="control">Task<select id="task"><option value="binary">Binary classification</option><option value="survival">Survival prediction</option></select></label>
+    <label class="control">Metric<select id="metric"></select></label>
+    <label class="control" id="horizon-control" hidden>Prediction horizon<select id="horizon"></select></label>
+    <label class="control">Sort by<select id="sort"></select></label>
+    <label class="control">Show<select id="limit"><option value="10">Top 10</option><option value="20" selected>Top 20</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="all">All</option></select></label>
+    <label class="control grow">Search<input id="search" type="search" placeholder="Model or selector" aria-label="Search models or selectors"></label>
   </div>
   <div class="view-settings">
-    <details class="settings" id="dataset-menu"><summary>数据集与用途</summary><div id="dataset-settings" class="dataset-settings"></div></details>
-    <label><input id="mean" type="checkbox">验证集均值</label>
-    <label><input id="complete" type="checkbox">只看各列均有结果的管道</label>
+    <details class="settings" id="dataset-menu"><summary>Datasets and roles</summary><div id="dataset-settings" class="dataset-settings"></div></details>
+    <label><input id="mean" type="checkbox">Validation mean</label>
+    <label><input id="complete" type="checkbox">Only pipelines with results in every column</label>
   </div>
 </section>
 <div class="matrix-heading">
-  <h2 id="matrix-title">模型表现</h2>
-  <div class="meta"><span id="row-count"></span><span class="scale"><span>较低</span><i aria-hidden="true"></i><span>较高</span></span></div>
+  <h2 id="matrix-title">Model performance</h2>
+  <div class="meta"><span id="row-count"></span><span class="scale"><span>Lower</span><i aria-hidden="true"></i><span>Higher</span></span></div>
 </div>
-<div class="table-region" role="region" aria-label="模型与数据集指标矩阵" tabindex="0">
+<div class="table-region" role="region" aria-label="Model and dataset metric matrix" tabindex="0">
   <table id="matrix"><thead></thead><tbody></tbody></table>
-  <div class="empty" id="empty" hidden>暂无匹配的结果。</div>
+  <div class="empty" id="empty" hidden>No matching results.</div>
 </div>
 <div class="bottom-bar">
   <span id="sort-note"></span>
-  <div class="pagination"><button id="previous">上一页</button><span id="pagination-label"></span><button id="next">下一页</button></div>
+  <div class="pagination"><button id="previous">Previous</button><span id="pagination-label"></span><button id="next">Next</button></div>
 </div>
 <section id="export-box" class="export-box" hidden>
-  <div class="download-line"><span id="export-status"></span><a id="download-link" download>保存文件</a><button id="close-export">收起</button></div>
-  <textarea id="csv-preview" aria-label="可复制的 CSV 数据" readonly hidden></textarea>
+  <div class="download-line"><span id="export-status"></span><a id="download-link" download>Save file</a><button id="close-export">Close</button></div>
+  <textarea id="csv-preview" aria-label="Copyable CSV data" readonly hidden></textarea>
 </section>
-<details class="help"><summary>指标与数据说明</summary>
-  <p>AUC、C-index 越高越好；Brier、Log loss 越低越好。“—”表示无可用结果。</p>
-  <p>验证集均值按当前显示的验证队列等权计算，缺列不计算。点击算法名称可看参数。</p>
+<details class="help"><summary>Metrics and data</summary>
+  <p>Higher AUC and C-index are better; lower Brier score and log loss are better. An em dash indicates an unavailable result.</p>
+  <p>Validation means give equal weight to each displayed validation cohort and require all cohort values. Click a model name to inspect its parameters.</p>
 </details>
 </main>
 <dialog id="model-dialog" aria-labelledby="detail-title">
-  <div class="dialog-head"><div><h2 id="detail-title"></h2><div id="detail-selector" class="muted"></div></div><button id="close-dialog" aria-label="关闭详情">关闭</button></div>
+  <div class="dialog-head"><div><h2 id="detail-title"></h2><div id="detail-selector" class="muted"></div></div><button id="close-dialog" aria-label="Close details">Close</button></div>
   <dl class="model-meta" id="model-meta"></dl>
-  <table id="detail-table"><thead><tr><th>数据集</th><th>用途</th><th>数值</th><th>状态</th></tr></thead><tbody></tbody></table>
-  <details class="help"><summary>配置与内部编号</summary><code id="detail-parameters"></code><code id="detail-id"></code></details>
+  <table id="detail-table"><thead><tr><th>Dataset</th><th>Role</th><th>Value</th><th>Status</th></tr></thead><tbody></tbody></table>
+  <details class="help"><summary>Configuration and internal ID</summary><code id="detail-parameters"></code><code id="detail-id"></code></details>
 </dialog>
 <script>
 "use strict";
 const REPORT = /*SB_REPORT_DATA*/null;
-let report = REPORT || {title:"模型比较",models:[],cells:[],datasets:[],default_sort:""};
+let report = REPORT || {title:"Model comparison",models:[],cells:[],datasets:[],default_sort:""};
 const $ = id => document.getElementById(id);
-const roleNames = {development_cv:"训练集 · 交叉验证",training:"训练集 · 拟合",validation:"验证集",test:"测试集",external:"外部队列",repeated_cv:"训练集 · 重复CV",internal_external_cv:"留队列验证",unspecified:"未指定"};
+const roleNames = {development_cv:"Development · cross-validation",training:"Development · fitted",validation:"Validation",test:"Test",external:"External cohort",repeated_cv:"Development · repeated CV",internal_external_cv:"Leave-cohort-out validation",unspecified:"Unspecified"};
 const metricInfo = {
   roc_auc:{name:"ROC AUC",task:"binary",higher:true,bounded:true},
   average_precision:{name:"Average precision",task:"binary",higher:true,bounded:true},
   brier_score:{name:"Brier score",task:"binary",higher:false,bounded:true},
   log_loss:{name:"Log loss",task:"binary",higher:false,bounded:false},
   harrell_c:{name:"Harrell C-index",task:"survival",higher:true,bounded:true},
-  time_auc:{name:"时间依赖 AUC",task:"survival",higher:true,bounded:true,horizon:true},
+  time_auc:{name:"Time-dependent AUC",task:"survival",higher:true,bounded:true,horizon:true},
   uno_c:{name:"Uno C-index",task:"survival",higher:true,bounded:true,horizon:true},
   ipcw_brier:{name:"IPCW Brier score",task:"survival",higher:false,bounded:true,horizon:true}
 };
@@ -128,7 +128,7 @@ const finite = v => typeof v==="number" && Number.isFinite(v);
 const cellKey = (task,model,dataset,metric) => JSON.stringify([task,model,dataset,metric]);
 const horizonKey = cell => JSON.stringify([cell.horizon===undefined?null:cell.horizon,cell.time_unit||""]);
 const format = value => finite(value)?value.toFixed(3):"—";
-const statusName = cell => !cell?"未评估":cell.available?"完成":cell.run_status!=="success"?"运行未完成":cell.metric_status==="not_requested"?"未请求该指标":"指标不可用";
+const statusName = cell => !cell?"Not evaluated":cell.available?"Complete":cell.run_status!=="success"?"Run incomplete":cell.metric_status==="not_requested"?"Metric not requested":"Metric unavailable";
 function announce(message,error=false){$("notice").hidden=!message;$("notice").textContent=message;$("notice").className="notice"+(error?" error":"");}
 function closeExport(){ $("export-box").hidden=true;if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=null;} }
 function activeCell(model,dataset){
@@ -156,9 +156,9 @@ function color(value){
 function rebuildDatasetSettings(){
   const container=$("dataset-settings");container.replaceChildren();
   report.datasets.forEach(d=>{
-    const row=el("div",undefined,"dataset-setting");const check=el("input");check.type="checkbox";check.checked=selectedDatasets.has(d.id);check.setAttribute("aria-label","显示 "+d.label);
+    const row=el("div",undefined,"dataset-setting");const check=el("input");check.type="checkbox";check.checked=selectedDatasets.has(d.id);check.setAttribute("aria-label","Show "+d.label);
     check.addEventListener("change",()=>{check.checked?selectedDatasets.add(d.id):selectedDatasets.delete(d.id);page=0;rebuildSort();render();});
-    const role=el("select");role.setAttribute("aria-label",d.label+" 的用途");
+    const role=el("select");role.setAttribute("aria-label",d.label+" role");
     const fixed=["development_cv","repeated_cv","internal_external_cv"].includes(d.role);
     const choices=fixed?[d.role]:["external","validation","test","training","unspecified"];
     choices.forEach(r=>role.append(option(r,roleNames[r])));role.value=d.role;role.disabled=fixed;
@@ -167,9 +167,9 @@ function rebuildDatasetSettings(){
   });
 }
 function rebuildSort(){
-  const old=$("sort").value, ds=datasetList();const sort=$("sort");sort.replaceChildren(option("","输入顺序"));
+  const old=$("sort").value, ds=datasetList();const sort=$("sort");sort.replaceChildren(option("","Input order"));
   ds.forEach(d=>sort.append(option(d.id,d.label+" · "+roleNames[d.role])));
-  if($("mean").checked&&ds.some(d=>d.role==="validation"))sort.append(option("@validation_mean","验证集均值"));
+  if($("mean").checked&&ds.some(d=>d.role==="validation"))sort.append(option("@validation_mean","Validation mean"));
   const allowed=Array.from(sort.options).map(o=>o.value);
   sort.value=allowed.includes(old)?old:(allowed.includes(report.default_sort)?report.default_sort:"");
 }
@@ -193,22 +193,22 @@ function rebuildHorizons(){
 function init(){
   byCell=new Map();report.cells.forEach(c=>byCell.set(cellKey(c.task,c.model,c.dataset,c.metric),c));
   selectedDatasets=new Set(report.datasets.map(d=>d.id));
-  $("page-title").textContent=report.title==="Model comparison"?"模型比较":report.title||"模型比较";
+  $("page-title").textContent=report.title==="Model comparison"?"Model comparison":report.title||"Model comparison";
   document.title=$("page-title").textContent+" · stormbreaker";
   const taskOptions=Array.from($("task").options),tasks=new Set(report.models.map(m=>m.task));
   taskOptions.forEach(o=>o.disabled=tasks.size>0&&!tasks.has(o.value));
   if(!tasks.has($("task").value)&&tasks.size)$("task").value=Array.from(tasks)[0];
-  $("sort").replaceChildren(option(report.default_sort||"",report.default_sort||"输入顺序"));
+  $("sort").replaceChildren(option(report.default_sort||"",report.default_sort||"Input order"));
   $("search").value="";$("mean").checked=false;$("complete").checked=false;page=0;
   rebuildDatasetSettings();rebuildMetrics();
-  if(!report.models.length)announce("运行 sb_compare_models() 或 sb_compare_cohorts() 后，即可生成结果页。也可导入已有结果 CSV。");
+  if(!report.models.length)announce("Run sb_compare_models() or sb_compare_cohorts() to generate results, or import an existing result CSV.");
 }
 function render(){
   closeExport();
   const task=$("task").value, metric=metricInfo[$("metric").value],ds=datasetList(),query=$("search").value.trim().toLocaleLowerCase();
   const useMean=$("mean").checked&&ds.some(d=>d.role==="validation");
   columnsNow=ds.map(d=>({id:d.id,label:d.label,role:d.role}));
-  if(useMean)columnsNow.push({id:"@validation_mean",label:"验证集均值",role:"validation",mean:true,count:ds.filter(d=>d.role==="validation").length});
+  if(useMean)columnsNow.push({id:"@validation_mean",label:"Validation mean",role:"validation",mean:true,count:ds.filter(d=>d.role==="validation").length});
   let rows=report.models.filter(m=>m.task===task);
   if(query)rows=rows.filter(m=>(m.selector+" "+m.learner+" "+m.id+" "+m.parameters).toLocaleLowerCase().includes(query));
   if($("complete").checked)rows=rows.filter(m=>ds.length>0&&ds.every(d=>{const c=activeCell(m,d.id);return c&&c.available&&finite(c.estimate);}));
@@ -224,9 +224,9 @@ function render(){
   const hr=el("tr");hr.append(el("th","#","col-index"),el("th","Selector","col-selector"),el("th","Learner","col-learner"));
   columnsNow.forEach(d=>{
     const th=el("th",undefined,"metric-head"+(basis===d.id?" sorted":""));th.scope="col";
-    const button=el("button",d.label+(basis===d.id?(metric.higher?" ↓":" ↑"):""));button.setAttribute("aria-label","按 "+d.label+" 排序");
+    const button=el("button",d.label+(basis===d.id?(metric.higher?" ↓":" ↑"):""));button.setAttribute("aria-label","Sort by "+d.label);
     button.addEventListener("click",()=>{$("sort").value=d.id;page=0;render();});
-    const subtitle=d.mean?"验证集 · "+d.count+" 个队列":roleNames[d.role];
+    const subtitle=d.mean?"Validation · "+d.count+" cohorts":roleNames[d.role];
     th.append(button,el("span",subtitle,"role"));hr.append(th);
   });head.append(hr);
   const groups=new Map();report.models.filter(m=>m.task===task).forEach(m=>{const key=m.selector+"|"+m.learner;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m.id);});
@@ -234,38 +234,38 @@ function render(){
     const tr=el("tr");tr.append(el("td",String(page*pageSize+i+1),"row-index"),el("td",m.selector,"selector-label"));
     const learner=el("td",undefined,"learner-cell"),button=el("button",m.learner,"model-button");button.addEventListener("click",()=>showModel(m));
     learner.append(button);const same=groups.get(m.selector+"|"+m.learner);
-    if(same.length>1){const variant=el("span","配置 "+(same.indexOf(m.id)+1),"variant");variant.title=m.parameters||m.id;learner.append(variant);}tr.append(learner);
+    if(same.length>1){const variant=el("span","Configuration "+(same.indexOf(m.id)+1),"variant");variant.title=m.parameters||m.id;learner.append(variant);}tr.append(learner);
     columnsNow.forEach(d=>{
       const c=d.mean?null:activeCell(m,d.id),value=d.mean?validationMean(m,ds):c&&c.available?c.estimate:null;
       const td=el("td",format(value),"metric-cell"+(!finite(value)?" missing":"")+(d.mean?" mean-cell":""));
-      td.dataset.label=d.label+" · "+(d.mean?"均值":roleNames[d.role]);
-      td.title=d.mean?"当前 "+d.count+" 个验证队列的等权均值":(c?statusName(c)+(finite(c.n)?" · n = "+c.n:""):"未评估");
+      td.dataset.label=d.label+" · "+(d.mean?"Mean":roleNames[d.role]);
+      td.title=d.mean?"Equal-weight mean of "+d.count+" displayed validation cohorts":(c?statusName(c)+(finite(c.n)?" · n = "+c.n:""):"Not evaluated");
       if(finite(value))td.style.backgroundColor=color(value);tr.append(td);
     });body.append(tr);
   });
   $("empty").hidden=rowsNow.length>0;$("matrix").hidden=!rowsNow.length;
-  $("summary").textContent=(task==="binary"?"二分类":"生存预测")+" · "+report.models.filter(m=>m.task===task).length+" 条管道 · "+ds.length+" 个结果集";
+  $("summary").textContent=(task==="binary"?"Binary classification":"Survival prediction")+" · "+report.models.filter(m=>m.task===task).length+" pipelines · "+ds.length+" result sets";
   $("matrix-title").textContent=metric.name+(metric.horizon&&$("horizon").selectedOptions.length?" · "+$("horizon").selectedOptions[0].textContent:"");
-  $("row-count").textContent=allRows.length+" / "+rows.length+" 条";
-  const sortLabel=$("sort").selectedOptions[0]?$("sort").selectedOptions[0].textContent:"输入顺序";
-  $("sort-note").textContent="排序："+sortLabel+" · "+(metric.higher?"数值越高越好":"数值越低越好")+" · — 未评估或不可用";
+  $("row-count").textContent=allRows.length+" / "+rows.length+" rows";
+  const sortLabel=$("sort").selectedOptions[0]?$("sort").selectedOptions[0].textContent:"Input order";
+  $("sort-note").textContent="Sort: "+sortLabel+" · "+(metric.higher?"Higher is better":"Lower is better")+" · — Not evaluated or unavailable";
   $("pagination-label").textContent=(page+1)+" / "+pages;$("previous").disabled=page===0;$("next").disabled=page>=pages-1;
   $("csv-button").disabled=allRows.length===0;$("svg-button").disabled=rowsNow.length===0;
 }
 function showModel(m){
   $("detail-title").textContent=m.learner;$("detail-selector").textContent="Selector · "+m.selector;
   const meta=$("model-meta");meta.replaceChildren();
-  [["任务",m.task==="binary"?"二分类":"生存预测"],["当前指标",$("matrix-title").textContent],["学习器",m.learner],["筛选方法",m.selector]].forEach(([name,value])=>meta.append(el("dt",name),el("dd",value)));
+  [["Task",m.task==="binary"?"Binary classification":"Survival prediction"],["Current metric",$("matrix-title").textContent],["Learner",m.learner],["Selector",m.selector]].forEach(([name,value])=>meta.append(el("dt",name),el("dd",value)));
   const body=$("detail-table").tBodies[0];body.replaceChildren();
   datasetList().forEach(d=>{const c=activeCell(m,d.id),tr=el("tr");[d.label,roleNames[d.role],format(c&&c.available?c.estimate:null),statusName(c)].forEach(t=>tr.append(el("td",t)));body.append(tr);});
-  $("detail-parameters").textContent="Learner: "+(m.parameters||"未随结果记录")+"\nSelector: "+(m.selection_parameters||"无附加参数");
+  $("detail-parameters").textContent="Learner: "+(m.parameters||"Not recorded with results")+"\nSelector: "+(m.selection_parameters||"No additional parameters");
   $("detail-id").textContent=m.id;
   $("model-dialog").showModal();
 }
 function csvValue(value){const text=value===null||value===undefined?"":String(value);return '"'+text.replace(/"/g,'""')+'"';}
 function exposeDownload(content,type,filename,message,preview){
   closeExport();objectUrl=URL.createObjectURL(new Blob([content],{type}));
-  $("download-link").href=objectUrl;$("download-link").download=filename;$("download-link").textContent="保存 "+filename;
+  $("download-link").href=objectUrl;$("download-link").download=filename;$("download-link").textContent="Save "+filename;
   $("export-status").textContent=message;$("export-box").hidden=false;$("csv-preview").hidden=!preview;
   if(preview)$("csv-preview").value=content;
   $("download-link").click();
@@ -278,7 +278,7 @@ function exportCSV(){
     const values=[m.id,m.selector,m.learner,d.label,d.role,m.task,$("metric").value,c?c.horizon:null,c?c.time_unit:"",c?c.estimate:null,c?c.metric_status:"not_supplied",c?c.run_status:"not_supplied",c?c.scope:"",c?c.aggregation:""];
     lines.push(values.map(csvValue).join(","));
   }));
-  exposeDownload("\uFEFF"+lines.join("\r\n"),"text/csv;charset=utf-8","stormbreaker-"+$("task").value+"-"+$("metric").value+".csv","CSV 已生成，保留完整数值与管道编号。",true);
+  exposeDownload("\uFEFF"+lines.join("\r\n"),"text/csv;charset=utf-8","stormbreaker-"+$("task").value+"-"+$("metric").value+".csv","CSV ready, with full numeric precision and pipeline IDs.",true);
 }
 function exportSVG(){
   const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");
@@ -288,7 +288,7 @@ function exportSVG(){
   function text(value,x,y,size=12,weight=400){const n=shape("text",{x,y,"font-family":"Arial, Microsoft YaHei, sans-serif","font-size":size,"font-weight":weight,fill:"#21332f"});n.textContent=value;return n;}
   shape("rect",{width:"100%",height:"100%",fill:"white"});text($("page-title").textContent+" · "+$("matrix-title").textContent,18,30,19,600);
   const headers=["#","Selector","Learner",...columnsNow.map(d=>d.label)];let x=18;
-  headers.forEach((h,i)=>{shape("rect",{x,y:48,width:widths[i],height:44,fill:"#eef3ef"});text(h,x+9,67,12,600);if(i>2)text(columnsNow[i-3].mean?"验证均值":roleNames[columnsNow[i-3].role],x+9,83,10);x+=widths[i];});
+  headers.forEach((h,i)=>{shape("rect",{x,y:48,width:widths[i],height:44,fill:"#eef3ef"});text(h,x+9,67,12,600);if(i>2)text(columnsNow[i-3].mean?"Validation mean":roleNames[columnsNow[i-3].role],x+9,83,10);x+=widths[i];});
   rowsNow.forEach((m,i)=>{
     const y=top+i*rh;let px=18;
     [String(page*50+i+1),m.selector,m.learner].forEach((value,j)=>{const max=j===2?34:25;const s=value.length>max?value.slice(0,max-1)+"…":value;text(s,px+9,y+25,12,j===2?600:400);px+=widths[j];});
@@ -296,20 +296,20 @@ function exportSVG(){
     shape("line",{x1:18,y1:y+rh,x2:total+18,y2:y+rh,stroke:"#e5eae6"});
   });
   text($("sort-note").textContent,18,height-10,10);
-  exposeDownload(new XMLSerializer().serializeToString(svg),"image/svg+xml;charset=utf-8","stormbreaker-matrix.svg","SVG 已生成，包含当前页 "+rowsNow.length+" 条管道。",false);
+  exposeDownload(new XMLSerializer().serializeToString(svg),"image/svg+xml;charset=utf-8","stormbreaker-matrix.svg","SVG ready, with "+rowsNow.length+" pipelines from the current page.",false);
 }
 function parseCSV(text){
   const rows=[];let row=[],value="",quoted=false;
   text=text.replace(/^\uFEFF/,"");
   for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){value+='"';i++;}else if(c==='"')quoted=false;else value+=c;}
-    else if(c==='"'){if(value.length)throw Error("CSV 引号格式不正确。");quoted=true;}
+    else if(c==='"'){if(value.length)throw Error("Invalid CSV quoting.");quoted=true;}
     else if(c===","){row.push(value);value="";}
     else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(value);if(row.some(v=>v.length))rows.push(row);row=[];value="";}
     else value+=c;
   }
-  if(quoted)throw Error("CSV 引号未闭合。");if(value.length||row.length){row.push(value);rows.push(row);}if(rows.length<2)throw Error("CSV 中没有结果记录。");
-  const headers=rows.shift();if(new Set(headers).size!==headers.length)throw Error("CSV 列名重复。");
-  return rows.map((r,i)=>{if(r.length!==headers.length)throw Error("第 "+(i+2)+" 行列数不一致。");return Object.fromEntries(headers.map((h,j)=>[h,r[j]]));});
+  if(quoted)throw Error("Unclosed CSV quote.");if(value.length||row.length){row.push(value);rows.push(row);}if(rows.length<2)throw Error("No result records in the CSV.");
+  const headers=rows.shift();if(new Set(headers).size!==headers.length)throw Error("Duplicate CSV column names.");
+  return rows.map((r,i)=>{if(r.length!==headers.length)throw Error("Column count mismatch in row "+(i+2)+".");return Object.fromEntries(headers.map((h,j)=>[h,r[j]]));});
 }
 function number(value){if(value===undefined||value===null||["","NA","NaN","null"].includes(String(value).trim()))return null;const n=Number(value);if(!Number.isFinite(n))return null;return n;}
 function prettyImported(id,pipeline=""){
@@ -326,26 +326,26 @@ async function importFiles(files){
     for(const file of files){
       const rows=parseCSV(await file.text());
       rows.forEach(r=>{
-        const id=r.pipeline_id||r.model_id;if(!id)throw Error("缺少 pipeline_id 或 model_id 列。");
+        const id=r.pipeline_id||r.model_id;if(!id)throw Error("Missing pipeline_id or model_id column.");
         const legacy=r.cv_status!==undefined;
         const type=r.task_type||(r.roc_auc!==undefined?"binary":r.harrell_c!==undefined?"survival":null);
-        if(!["binary","survival"].includes(type))throw Error("请提供 task_type（binary 或 survival）。");
+        if(!["binary","survival"].includes(type))throw Error("Provide task_type (binary or survival).");
         const dataset=r.dataset||r.cohort_id||file.name.replace(/\.csv$/i,"");
         const role=r.role||r.cohort_role||(legacy?"development_cv":"unspecified");
-        if(!Object.hasOwn(roleNames,role))throw Error("数据集 role 不正确："+role);
-        if(datasets.has(dataset)&&datasets.get(dataset).role!==role)throw Error("同一数据集的用途不一致："+dataset);
+        if(!Object.hasOwn(roleNames,role))throw Error("Invalid dataset role: "+role);
+        if(datasets.has(dataset)&&datasets.get(dataset).role!==role)throw Error("Conflicting roles for dataset: "+dataset);
         datasets.set(dataset,{id:dataset,label:dataset,role});
         const tokens=id.split("__"),sel=r.selector||tokens[0],learner=r.learner||tokens[1]||r.model_id||id;
         models.set(type+"::"+id,{id,task:type,selector:prettyImported(sel),learner:r.model_label||prettyImported(learner,id),selector_id:sel,learner_id:learner,parameters:"",selection_parameters:""});
         let metrics=r.metric?[r.metric]:Object.keys(metricInfo).filter(m=>r[m]!==undefined&&metricInfo[m].task===type);
         if(legacy)metrics=[type==="binary"?"roc_auc":"harrell_c"];
-        if(!metrics.length)throw Error("找不到可用指标列。");
+        if(!metrics.length)throw Error("No usable metric columns.");
         metrics.forEach(metric=>{
-          if(!metricInfo[metric]||metricInfo[metric].task!==type)throw Error("指标与任务不匹配："+metric);
+          if(!metricInfo[metric]||metricInfo[metric].task!==type)throw Error("Metric does not match the task: "+metric);
           const estimate=number(r.metric?r.estimate:legacy?r.primary_metric:r[metric]);
           const run=r.run_status||r.cv_status||r.status||"success";
           const status=r.metric_status||r.primary_metric_status||r[metric+"_status"]||(estimate===null?"not_saved":"success");
-          const key=cellKey(type,id,dataset,metric);if(seen.has(key))throw Error("同一管道、数据集和指标出现重复记录，请分别命名结果集。");seen.add(key);
+          const key=cellKey(type,id,dataset,metric);if(seen.has(key))throw Error("Duplicate pipeline, dataset and metric records; give result sets distinct names.");seen.add(key);
           cells.push({model:id,task:type,dataset,metric,estimate,metric_status:status,run_status:run,
             available:run==="success"&&status==="success"&&finite(estimate),
             horizon:number(r.prediction_horizon),time_unit:r.time_unit||"",n:number(r.n||r.development_n),
@@ -354,8 +354,8 @@ async function importFiles(files){
       });
     }
     const ds=Array.from(datasets.values()),dev=ds.find(d=>d.role==="development_cv");
-    report={title:"模型比较",datasets:ds,models:Array.from(models.values()),cells,default_sort:dev?dev.id:""};
-    init();announce("已载入 "+files.length+" 个文件。可在“数据集与用途”中标记验证集和测试集。");
+    report={title:"Model comparison",datasets:ds,models:Array.from(models.values()),cells,default_sort:dev?dev.id:""};
+    init();announce("Loaded "+files.length+" files. Set validation and test roles under Datasets and roles.");
   }catch(error){announce(error.message,true);}
 }
 $("task").addEventListener("change",rebuildMetrics);

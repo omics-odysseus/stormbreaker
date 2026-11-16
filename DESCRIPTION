@@ -1,6 +1,6 @@
 Package: stormbreaker
 Title: Transcriptomic Prediction and Model Comparison
-Version: 0.3.47
+Version: 0.3.47.1
 Authors@R: 
     person(
       given = "HimejimaGyomei",
@@ -19,8 +19,8 @@ Description: Build and compare transcriptomic prediction models for binary
     discriminant analysis, naive Bayes and classification trees support
     independent feature analysis and shared-fold model evaluation.
 License: MIT + file LICENSE
-URL: https://github.com/githubniubi1234/stormbreaker
-BugReports: https://github.com/githubniubi1234/stormbreaker/issues
+URL: https://github.com/omics-odysseus/stormbreaker
+BugReports: https://github.com/omics-odysseus/stormbreaker/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

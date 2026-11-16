@@ -1,9 +1,186 @@
-sb_final_fit_attempt <- function(code) {
-  tryCatch(
-    list(value = force(code), error = NULL),
-    error = function(error) list(value = NULL, error = error)
-  )
-}
+#' Final fitting and prediction
+#' @name sb_fit_final
+#' @description Fit a chosen pipeline on development data and predict new samples from its saved model.
+#' @rawRd \arguments{
+#' \item{task}{
+#' A task returned by \code{\link[=sb_surv_task]{sb_surv_task()}} or \code{\link[=sb_binary_task]{sb_binary_task()}}.
+#' }
+#' \item{pipeline}{
+#' One explicit task-matched pipeline returned by
+#' \code{\link[=sb_pipeline]{sb_pipeline()}}.
+#' }
+#' \item{capture_diagnostics}{
+#' Keep native learner and selector objects, fitted
+#' predictor data and training endpoints for optional algorithm diagnostics.
+#' Default FALSE preserves the existing compact result. TRUE may produce a
+#' large, sensitive, engine-version-dependent object; do not share it as a
+#' de-identified figure or portable prediction signature. No additional
+#' fitting is performed and saved prediction state is unchanged.
+#' }
+#' \item{fit}{
+#' A successful \code{stormbreaker_final_fit} from \code{\link[=sb_fit_final]{sb_fit_final()}}.
+#' }
+#' \item{new_data}{
+#' A non-empty data frame containing one row per new patient,
+#' the declared ID column, and every fitted numeric feature. Other columns
+#' are ignored.
+#' }
+#' \item{id_col}{
+#' Name of the unique patient identifier column in \code{new_data}.
+#' }
+#' }
+#' @rawRd \value{See the individual entries in Function reference.}
+#' @rawRd \section{Function reference}{
+#' \subsection{\code{sb_fit_final()}}{
+#' \code{sb_fit_final()} refits one user-supplied pipeline on the complete
+#' development task. A learned selector is refitted on all development rows,
+#' while a fixed feature block is applied unchanged without reading outcomes.
+#' A task's declared \code{group_col} is retained for glmnet inner tuning while
+#' unique row IDs remain separate. Grouping does not change metric weighting.
+#' A glmnet learner repeats its declared inner cross-validation there. For a
+#' supervised selected glmnet pipeline, the selector is additionally refitted
+#' on every inner analysis fold before lambda is chosen; for a fixed feature
+#' block, lambda is tuned only on those predeclared columns. Glmnet's declared
+#' predictor-standardization setting is applied separately in every inner fit
+#' and the final full-development refit. Its predeclared minimum-error or
+#' one-standard-error lambda rule is reused without comparing rules on
+#' development or external performance. The returned learner state is
+#' self-contained for later state-only prediction, and its contents are
+#' learner-specific. Coefficient-based learners retain prediction summaries;
+#' engine-backed learners retain a pruned prediction object. KNN necessarily
+#' retains the standardized development feature matrix and binary outcomes,
+#' while SVM retains support vectors, coefficients, and class metadata.
+#' LVQ states retain analysis-fold scaling values, patient-derived prototypes,
+#' and outcome-derived prototype class labels. They contain no patient IDs or
+#' complete development table, but a prototype can equal an initialized
+#' standardized training row.
+#' randomForestSRC retains event-time metadata inside its prediction forest.
+#' CatBoost SurvivalAft states retain the serialized booster plus fixed Normal
+#' distribution metadata, while cancerclass states retain its all-feature class
+#' centroids and inner-OOF logistic calibration coefficients. Neither state
+#' retains patient IDs or row-level outcomes.
+#' XGBoost AFT states retain the serialized raw booster and fixed normal-loss
+#' prediction metadata, but no patient IDs, follow-up times, or event indicators.
+#' Mboost AFT states retain the serialized native engine, including the training
+#' data that mboost requires for prediction, and must therefore be handled as
+#' sensitive patient-derived objects.
+#' The timereg learners retain their native event-time coefficient grid but no
+#' patient IDs, censoring-time vector, event-indicator vector, or fitted engine.
+#' partykit conditional-inference survival states retain their fitted
+#' conditional-distribution data because the engine requires it for prediction.
+#' Akritas states retain the analysis predictor basis and paired follow-up/event
+#' values required for new-patient conditional product-limit estimation, without
+#' patient IDs or row names. Treat these states as sensitive training data.
+#' They use the native empirical joint CDF and fixed bandwidth 0.5; scalar risk
+#' is negative step-RMST through maximum analysis follow-up, with direct native
+#' survival probabilities rather than Cox recalibration.
+#' Bagged kNN survival states necessarily retain the development feature matrix,
+#' follow-up times, and event indicators required for nearest-neighbor prediction.
+#' Ahaz and Bujar linear states retain portable coefficients and their
+#' analysis-fold horizon-calibration summaries, not fitted engines, patient IDs,
+#' raw follow-up vectors, or event-indicator vectors. The Bujar residual
+#' Kaplan-Meier step curve is patient-derived calibration data, so final states
+#' should still be handled as sensitive objects.
+#' Weighted-subspace forest states remove training outcomes and patient-level OOB
+#' indices while retaining the native trees required for prediction.
+#' Fixed flexsurv parametric states retain only fitted regression and ancillary
+#' distribution parameters, not the native engine or analysis outcomes.
+#' Fixed flexsurvspline states retain only spline/regression coefficients and
+#' analysis-fold knot locations, not the native engine or analysis outcomes.
+#' Final
+#' fit objects should therefore be handled as potentially patient-derived
+#' sensitive data. A task's optional decision-threshold declaration is retained
+#' only as prediction metadata and does not change fitting or produce action
+#' labels.
+#' 
+#' \strong{Returns:} A \code{stormbreaker_final_fit} containing the development-cohort audit,
+#' fitted selector state, inner-tuning audit when required, portable learner
+#' state, prediction semantics (including any declared decision
+#' thresholds), provenance, and any execution failure.
+#' 
+#' \strong{Details:} This operation does not estimate out-of-fold or external performance, does
+#' not compare pipelines, and does not select a winner. The pipeline must be an
+#' explicit specification created by \code{\link[=sb_pipeline]{sb_pipeline()}}. Execution failures are
+#' returned as stage-aware failed fit objects without substituting another
+#' selector or learner.
+#' }
+#' 
+#' \subsection{\code{sb_predict_final()}}{
+#' \code{sb_predict_final()} uses only the declared ID column and the exact numeric
+#' features saved by \code{\link[=sb_fit_final]{sb_fit_final()}}. Other columns are ignored, including
+#' columns named like outcomes, survival times, or events. Required features
+#' are restored to their fitted order, and prediction calls only the portable
+#' learner state; no selector, learner, or baseline hazard is refitted.
+#' 
+#' \strong{Returns:} A \code{stormbreaker_final_prediction} with patient-order-preserving
+#' state-only predictions and explicit success or failure information.
+#' \code{prediction_variation} labels exactly constant risk/probability batches
+#' without changing predictions or fit status. A one-patient batch is
+#' insufficient to assess variation, not evidence of a constant model.
+#' 
+#' \strong{Details:} Binary fits return the probability of class \code{1}. Survival fits return their
+#' declared risk score: \code{x_beta} for ordinary Cox, glmnet Cox, fixed CoxBoost,
+#' plsRcox, SuperPC, or calibrated linear survival-SVM; the calibrated native
+#' kernel score for additive or RBF survival-SVM; the native raw margin for fixed
+#' CatBoost Cox; the negative native log-time margin for CatBoost SurvivalAft
+#' or XGBoost AFT; the native link-scale log hazard for fixed GBM-Cox or
+#' XGBoost-Cox; the
+#' negative native distributional log-time link for mboost AFT; the negative
+#' native ranking link for mboost Gehan or Uno-C; the native additive-hazard
+#' linear predictor for ahaz; negative predicted log time for Bujar; native
+#' forest mortality for ranger split-rule forests or randomForestSRC; negative fitted log time for
+#' SurvReg; log relative rate for survival Rpart;
+#' final conditional cumulative hazard for partykit Ctree and CForest;
+#' cumulative hazard at the last analysis event for Aalen; or \code{x_beta} for
+#' proportional-odds survival regression.
+#' When the development task declared a prediction horizon, learners with a
+#' saved baseline hazard return the corresponding survival probability; ranger,
+#' randomForestSRC, CatBoost SurvivalAft, XGBoost AFT, mboost AFT, mboost Gehan,
+#' SurvReg, Ctree,
+#' CForest, Aalen, and proportional odds read it directly from their saved
+#' fitted survival representation. Mboost Uno-C instead uses its saved
+#' analysis-fold Cox/Breslow horizon calibration. An invalid native
+#' Aalen probability is not clipped or recalibrated. When a binary task, or a horizon-
+#' enabled survival task, declared decision thresholds, the endpoint-free
+#' prediction carries that unchanged vector as top-level metadata but does not
+#' create class or action labels. Input or state failures return an explicit
+#' failed prediction audit and never invoke a fallback learner.
+#' 
+#' For ordinary Cox final predictions whose probabilities round to zero or one,
+#' the optional log_cumulative_hazard column preserves log(H0(h)) + x beta from
+#' the saved model when finite. External time AUC and complementary-log-log
+#' calibration, including bootstrap, use this monotone scale. Probabilities,
+#' Brier scores and decision curves are not clipped or changed. Without this
+#' saved scale, boundary-probability calibration keeps its existing unavailable
+#' status; arbitrary risk scores are never substituted.
+#' }
+#' }
+#' @rawRd \examples{
+#' # sb_fit_final
+#' d <- sb_example_survival(n = 30, seed = 1)
+#' task <- sb_surv_task(
+#'   d, "patient_id", "time", "event",
+#'   predictors = c("gene_a", "gene_b"),
+#'   time_unit = "month"
+#' )
+#' fit <- sb_fit_final(task, sb_pipeline())
+#' fit
+#' 
+#' # sb_predict_final
+#' d <- sb_example_binary(n = 30, seed = 1)
+#' task <- sb_binary_task(
+#'   d, "patient_id", "outcome",
+#'   predictors = c("gene_a", "gene_b")
+#' )
+#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
+#' new_data <- d[1:3, c("patient_id", "gene_a", "gene_b")]
+#' sb_predict_final(fit, new_data, "patient_id")
+#' }
+NULL
+
+# ---- final-fit ----
+
+sb_final_fit_attempt <- sb_external_attempt
 
 sb_as_final_fit <- function(result) {
   class(result) <- "stormbreaker_final_fit"
@@ -537,100 +714,8 @@ sb_final_fit_development <- function(task) {
   development
 }
 
-#' Fit one explicit pipeline on all development patients
-#'
-#' `sb_fit_final()` refits one user-supplied pipeline on the complete
-#' development task. A learned selector is refitted on all development rows,
-#' while a fixed feature block is applied unchanged without reading outcomes.
-#' A task's declared `group_col` is retained for glmnet inner tuning while
-#' unique row IDs remain separate. Grouping does not change metric weighting.
-#' A glmnet learner repeats its declared inner cross-validation there. For a
-#' supervised selected glmnet pipeline, the selector is additionally refitted
-#' on every inner analysis fold before lambda is chosen; for a fixed feature
-#' block, lambda is tuned only on those predeclared columns. Glmnet's declared
-#' predictor-standardization setting is applied separately in every inner fit
-#' and the final full-development refit. Its predeclared minimum-error or
-#' one-standard-error lambda rule is reused without comparing rules on
-#' development or external performance. The returned learner state is
-#' self-contained for later state-only prediction, and its contents are
-#' learner-specific. Coefficient-based learners retain prediction summaries;
-#' engine-backed learners retain a pruned prediction object. KNN necessarily
-#' retains the standardized development feature matrix and binary outcomes,
-#' while SVM retains support vectors, coefficients, and class metadata.
-#' LVQ states retain analysis-fold scaling values, patient-derived prototypes,
-#' and outcome-derived prototype class labels. They contain no patient IDs or
-#' complete development table, but a prototype can equal an initialized
-#' standardized training row.
-#' randomForestSRC retains event-time metadata inside its prediction forest.
-#' CatBoost SurvivalAft states retain the serialized booster plus fixed Normal
-#' distribution metadata, while cancerclass states retain its all-feature class
-#' centroids and inner-OOF logistic calibration coefficients. Neither state
-#' retains patient IDs or row-level outcomes.
-#' XGBoost AFT states retain the serialized raw booster and fixed normal-loss
-#' prediction metadata, but no patient IDs, follow-up times, or event indicators.
-#' Mboost AFT states retain the serialized native engine, including the training
-#' data that mboost requires for prediction, and must therefore be handled as
-#' sensitive patient-derived objects.
-#' The timereg learners retain their native event-time coefficient grid but no
-#' patient IDs, censoring-time vector, event-indicator vector, or fitted engine.
-#' partykit conditional-inference survival states retain their fitted
-#' conditional-distribution data because the engine requires it for prediction.
-#' Akritas states retain the analysis predictor basis and paired follow-up/event
-#' values required for new-patient conditional product-limit estimation, without
-#' patient IDs or row names. Treat these states as sensitive training data.
-#' They use the native empirical joint CDF and fixed bandwidth 0.5; scalar risk
-#' is negative step-RMST through maximum analysis follow-up, with direct native
-#' survival probabilities rather than Cox recalibration.
-#' Bagged kNN survival states necessarily retain the development feature matrix,
-#' follow-up times, and event indicators required for nearest-neighbor prediction.
-#' Ahaz and Bujar linear states retain portable coefficients and their
-#' analysis-fold horizon-calibration summaries, not fitted engines, patient IDs,
-#' raw follow-up vectors, or event-indicator vectors. The Bujar residual
-#' Kaplan-Meier step curve is patient-derived calibration data, so final states
-#' should still be handled as sensitive objects.
-#' Weighted-subspace forest states remove training outcomes and patient-level OOB
-#' indices while retaining the native trees required for prediction.
-#' Fixed flexsurv parametric states retain only fitted regression and ancillary
-#' distribution parameters, not the native engine or analysis outcomes.
-#' Fixed flexsurvspline states retain only spline/regression coefficients and
-#' analysis-fold knot locations, not the native engine or analysis outcomes.
-#' Final
-#' fit objects should therefore be handled as potentially patient-derived
-#' sensitive data. A task's optional decision-threshold declaration is retained
-#' only as prediction metadata and does not change fitting or produce action
-#' labels.
-#'
-#' This operation does not estimate out-of-fold or external performance, does
-#' not compare pipelines, and does not select a winner. The pipeline must be an
-#' explicit specification created by [sb_pipeline()]. Execution failures are
-#' returned as stage-aware failed fit objects without substituting another
-#' selector or learner.
-#'
-#' @param task A task returned by [sb_surv_task()] or [sb_binary_task()].
-#' @param pipeline One explicit task-matched pipeline returned by
-#'   [sb_pipeline()].
-#' @param capture_diagnostics Keep native learner and selector objects, fitted
-#'   predictor data and training endpoints for optional algorithm diagnostics.
-#'   Default FALSE preserves the existing compact result. TRUE may produce a
-#'   large, sensitive, engine-version-dependent object; do not share it as a
-#'   de-identified figure or portable prediction signature. No additional
-#'   fitting is performed and saved prediction state is unchanged.
-#'
-#' @return A `stormbreaker_final_fit` containing the development-cohort audit,
-#'   fitted selector state, inner-tuning audit when required, portable learner
-#'   state, prediction semantics (including any declared decision
-#'   thresholds), provenance, and any execution failure.
+#' @rdname sb_fit_final
 #' @export
-#'
-#' @examples
-#' d <- sb_example_survival(n = 30, seed = 1)
-#' task <- sb_surv_task(
-#'   d, "patient_id", "time", "event",
-#'   predictors = c("gene_a", "gene_b"),
-#'   time_unit = "month"
-#' )
-#' fit <- sb_fit_final(task, sb_pipeline())
-#' fit
 sb_fit_final <- function(task, pipeline, capture_diagnostics = FALSE) {
   pipeline <- sb_upgrade_legacy_names(pipeline)
 
@@ -1569,72 +1654,8 @@ sb_validate_final_prediction_values <- function(fit, values, n) {
   result
 }
 
-#' Predict new patients from a saved final fit without reading outcomes
-#'
-#' `sb_predict_final()` uses only the declared ID column and the exact numeric
-#' features saved by [sb_fit_final()]. Other columns are ignored, including
-#' columns named like outcomes, survival times, or events. Required features
-#' are restored to their fitted order, and prediction calls only the portable
-#' learner state; no selector, learner, or baseline hazard is refitted.
-#'
-#' Binary fits return the probability of class `1`. Survival fits return their
-#' declared risk score: `x_beta` for ordinary Cox, glmnet Cox, fixed CoxBoost,
-#' plsRcox, SuperPC, or calibrated linear survival-SVM; the calibrated native
-#' kernel score for additive or RBF survival-SVM; the native raw margin for fixed
-#' CatBoost Cox; the negative native log-time margin for CatBoost SurvivalAft
-#' or XGBoost AFT; the native link-scale log hazard for fixed GBM-Cox or
-#' XGBoost-Cox; the
-#' negative native distributional log-time link for mboost AFT; the negative
-#' native ranking link for mboost Gehan or Uno-C; the native additive-hazard
-#' linear predictor for ahaz; negative predicted log time for Bujar; native
-#' forest mortality for ranger split-rule forests or randomForestSRC; negative fitted log time for
-#' SurvReg; log relative rate for survival Rpart;
-#' final conditional cumulative hazard for partykit Ctree and CForest;
-#' cumulative hazard at the last analysis event for Aalen; or `x_beta` for
-#' proportional-odds survival regression.
-#' When the development task declared a prediction horizon, learners with a
-#' saved baseline hazard return the corresponding survival probability; ranger,
-#' randomForestSRC, CatBoost SurvivalAft, XGBoost AFT, mboost AFT, mboost Gehan,
-#' SurvReg, Ctree,
-#' CForest, Aalen, and proportional odds read it directly from their saved
-#' fitted survival representation. Mboost Uno-C instead uses its saved
-#' analysis-fold Cox/Breslow horizon calibration. An invalid native
-#' Aalen probability is not clipped or recalibrated. When a binary task, or a horizon-
-#' enabled survival task, declared decision thresholds, the endpoint-free
-#' prediction carries that unchanged vector as top-level metadata but does not
-#' create class or action labels. Input or state failures return an explicit
-#' failed prediction audit and never invoke a fallback learner.
-#'
-#' @param fit A successful `stormbreaker_final_fit` from [sb_fit_final()].
-#' @param new_data A non-empty data frame containing one row per new patient,
-#'   the declared ID column, and every fitted numeric feature. Other columns
-#'   are ignored.
-#' @param id_col Name of the unique patient identifier column in `new_data`.
-#'
-#' @return A `stormbreaker_final_prediction` with patient-order-preserving
-#'   state-only predictions and explicit success or failure information.
-#'   `prediction_variation` labels exactly constant risk/probability batches
-#'   without changing predictions or fit status. A one-patient batch is
-#'   insufficient to assess variation, not evidence of a constant model.
-#' @details
-#' For ordinary Cox final predictions whose probabilities round to zero or one,
-#' the optional log_cumulative_hazard column preserves log(H0(h)) + x beta from
-#' the saved model when finite. External time AUC and complementary-log-log
-#' calibration, including bootstrap, use this monotone scale. Probabilities,
-#' Brier scores and decision curves are not clipped or changed. Without this
-#' saved scale, boundary-probability calibration keeps its existing unavailable
-#' status; arbitrary risk scores are never substituted.
+#' @rdname sb_fit_final
 #' @export
-#'
-#' @examples
-#' d <- sb_example_binary(n = 30, seed = 1)
-#' task <- sb_binary_task(
-#'   d, "patient_id", "outcome",
-#'   predictors = c("gene_a", "gene_b")
-#' )
-#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
-#' new_data <- d[1:3, c("patient_id", "gene_a", "gene_b")]
-#' sb_predict_final(fit, new_data, "patient_id")
 sb_predict_final <- function(fit, new_data, id_col) {
   fit <- sb_upgrade_legacy_names(fit)
 
@@ -1750,4 +1771,334 @@ print.stormbreaker_final_prediction <- function(x, ...) {
     cat("Failed stage:", x$error_stage, "|", x$error_class, "\n")
   }
   invisible(x)
+}
+
+# ---- pipeline-fit-core ----
+
+sb_pipeline_inner_selection_method <- function(pipeline) {
+  if (pipeline$learner %in% sb_svm_probability_learner_ids()) {
+    if (sb_selector_is_learned(pipeline$selector)) {
+      return("svm_fold_local_probability_calibration")
+    }
+    return(if (identical(pipeline$selector, "fixed_features")) {
+      "predeclared_feature_subset"
+    } else "none")
+  }
+  if (!pipeline$learner %in% c("glmnet_cox", "glmnet_logistic")) {
+    return(NA_character_)
+  }
+  if (sb_selector_is_learned(pipeline$selector)) {
+    return("glmnet_exclude_function")
+  }
+  if (identical(pipeline$selector, "fixed_features")) {
+    return("predeclared_feature_subset")
+  }
+  "none"
+}
+
+sb_fit_runtime_selector_uncached <- function(selector, x, endpoint) {
+  if (identical(selector$id, "ordered_chain")) return(selector$fit(x, endpoint))
+  task_type <- endpoint[["task_type"]]
+  if (!isTRUE(selector[["needs_outcome"]])) {
+    return(selector[["fit"]](x))
+  }
+  if (identical(task_type, "survival")) {
+    if (selector$id %in% c("lasso_nonzero", "enet_cox_nonzero", "ridge_cox_weights")) return(
+      selector$fit(x, endpoint$time, endpoint$event, group_ids = endpoint$group_ids))
+    return(selector[["fit"]](
+      x,
+      endpoint[["time"]],
+      endpoint[["event"]]
+    ))
+  }
+  if (identical(task_type, "binary")) {
+    if (selector$id %in% sb_binary_model_selector_ids()) return(
+      selector$fit(x, endpoint$outcome, group_ids = endpoint$group_ids))
+    return(selector[["fit"]](x, endpoint[["outcome"]]))
+  }
+  sb_abort(
+    "The runtime endpoint type is not supported.",
+    "stormbreaker_bad_runtime_endpoint"
+  )
+}
+
+sb_make_glmnet_fold_selector_filter <- function(selector, fitted_selector,
+                                                patient_ids, fold_id,
+                                                task_type, group_ids = NULL) {
+  if (utils::packageVersion("glmnet") <
+      base::numeric_version("4.1.2")) {
+    sb_abort(
+      paste0(
+        "Fold-local supervised selection requires `glmnet` >= 4.1-2, ",
+        "whose function-valued `exclude` filter is refitted inside ",
+        "each CV analysis fold."
+      ),
+      "stormbreaker_glmnet_fold_filter_unavailable"
+    )
+  }
+  patient_ids <- as.character(patient_ids)
+  valid_ids <- length(patient_ids) == length(fold_id) &&
+    length(patient_ids) > 0L && !anyNA(patient_ids) &&
+    all(nzchar(trimws(patient_ids))) && anyDuplicated(patient_ids) == 0L
+  if (!valid_ids) {
+    sb_abort(
+      "Fold-local glmnet selection requires one unique patient ID per row.",
+      "stormbreaker_bad_runtime_patient_ids"
+    )
+  }
+  if (!task_type %in% c("survival", "binary")) {
+    sb_abort(
+      "Fold-local glmnet selection received an unsupported endpoint type.",
+      "stormbreaker_bad_runtime_endpoint"
+    )
+  }
+
+  expected_folds <- sort(unique(fold_id))
+  records <- stats::setNames(
+    vector("list", length(expected_folds)),
+    as.character(expected_folds)
+  )
+  exclude <- function(x, y, weights = NULL, ...) {
+    row_ids <- rownames(x)
+    positions <- match(row_ids, patient_ids)
+    valid_rows <- !is.null(row_ids) && length(row_ids) == nrow(x) &&
+      !anyNA(positions) && anyDuplicated(row_ids) == 0L
+    if (!valid_rows) {
+      sb_abort(
+        paste0(
+          "glmnet did not preserve the patient-row identity needed for ",
+          "fold-local supervised selection."
+        ),
+        "stormbreaker_glmnet_fold_filter_protocol"
+      )
+    }
+
+    x_frame <- as.data.frame(
+      x,
+      optional = TRUE,
+      stringsAsFactors = FALSE
+    )
+    if (length(positions) == length(patient_ids)) {
+      fitted <- fitted_selector
+    } else {
+      omitted_positions <- setdiff(seq_along(patient_ids), positions)
+      omitted_folds <- unique(fold_id[omitted_positions])
+      valid_inner_analysis <- length(omitted_folds) == 1L &&
+        setequal(positions, which(fold_id != omitted_folds[[1L]]))
+      if (!valid_inner_analysis) {
+        sb_abort(
+          paste0(
+            "glmnet supplied rows that do not match one declared inner ",
+            "analysis fold."
+          ),
+          "stormbreaker_glmnet_fold_filter_protocol"
+        )
+      }
+      fold <- as.integer(omitted_folds[[1L]])
+      endpoint <- if (identical(task_type, "survival")) {
+        list(
+          task_type = "survival",
+          time = as.numeric(y[, 1L]),
+          event = as.integer(y[, 2L])
+        )
+      } else {
+        list(
+          task_type = "binary",
+          outcome = as.integer(y)
+        )
+      }
+      if (!is.null(group_ids)) endpoint$group_ids <- group_ids[positions]
+      fitted <- sb_fit_runtime_selector(selector, x_frame, endpoint)
+      records[[as.character(fold)]] <<- list(
+        fold = fold,
+        analysis_patient_ids = row_ids,
+        selected_features = fitted$selected_features
+      )
+    }
+    which(!colnames(x) %in% fitted$selected_features)
+  }
+  inner_selections <- function() {
+    result <- unname(records[as.character(expected_folds)])
+    if (any(vapply(result, is.null, logical(1)))) {
+      sb_abort(
+        paste0(
+          "glmnet did not invoke the fold-local selector for every ",
+          "declared inner analysis fold."
+        ),
+        "stormbreaker_glmnet_fold_filter_protocol"
+      )
+    }
+    result
+  }
+  list(exclude = exclude, inner_selections = inner_selections)
+}
+
+sb_prepare_runtime_learner <- function(learner, pipeline, x, endpoint,
+                                       patient_ids,
+                                       selection_context = NULL,
+                                       group_ids = NULL) {
+  context <- .sb_selector_reuse_context$active
+  if (is.null(context) || !learner$id %in% c("glmnet_logistic", "glmnet_cox",
+      sb_svm_probability_learner_ids())) {
+    return(sb_prepare_runtime_learner_uncached(learner, pipeline, x, endpoint,
+      patient_ids, selection_context, group_ids))
+  }
+  selection <- NULL
+  if (sb_selector_is_learned(pipeline$selector) && !is.null(selection_context)) {
+    s <- selection_context$selector
+    selection <- list(x = selection_context$x,
+      fitted_selector = selection_context$fitted_selector,
+      id = s$id, params = s$params, capture_history = s$capture_history,
+      upstream_context = s$upstream_context,
+      fit_body = body(s$fit), fit_formals = formals(s$fit))
+  }
+  signature <- list(params = learner$params, x = x, endpoint = endpoint,
+    patient_ids = patient_ids, group_ids = group_ids, selection = selection,
+    selector_is_learned = sb_selector_is_learned(pipeline$selector),
+    rng_kind = RNGkind())
+  entries <- context$preparations[[learner$id]]
+  for (entry in entries) {
+    if (identical(signature, entry$signature)) {
+      context$preparation_hits <- context$preparation_hits + 1L
+      prepared <- entry$value
+      prepared$tuning$inner_selection_method <- sb_pipeline_inner_selection_method(pipeline)
+      return(prepared)
+    }
+  }
+  context$preparation_misses <- context$preparation_misses + 1L
+  warned <- FALSE
+  prepared <- withCallingHandlers(
+    sb_prepare_runtime_learner_uncached(learner, pipeline, x, endpoint,
+      patient_ids, selection_context, group_ids),
+    warning = function(w) warned <<- TRUE)
+  if (!warned && length(prepared$tuning$warnings) == 0L) {
+    context$preparations[[learner$id]] <- c(entries,
+      list(list(signature = signature, value = prepared)))
+  }
+  prepared
+}
+
+sb_prepare_runtime_learner_uncached <- function(learner, pipeline, x, endpoint,
+                                                patient_ids,
+                                                selection_context = NULL,
+                                                group_ids = NULL) {
+  if (!identical(length(patient_ids), nrow(x))) {
+    sb_abort(
+      "Runtime patient IDs must match the fitted analysis rows.",
+      "stormbreaker_bad_runtime_patient_ids"
+    )
+  }
+  tuning_x <- x
+  tuning_selector <- NULL
+  tuning_fitted_selector <- NULL
+  if (learner[["id"]] %in% c("glmnet_cox", "glmnet_logistic",
+                            sb_svm_probability_learner_ids()) &&
+      sb_selector_is_learned(pipeline[["selector"]])) {
+    valid_context <- is.list(selection_context) &&
+      is.list(selection_context[["selector"]]) &&
+      inherits(
+        selection_context[["fitted_selector"]],
+        "stormbreaker_selector_fit"
+      ) && is.data.frame(selection_context[["x"]]) &&
+      nrow(selection_context[["x"]]) == nrow(x)
+    if (!valid_context) {
+      sb_abort(
+        paste0(
+          "A selected internally resampled learner requires its full outer-analysis ",
+          "predictors and fitted selector."
+        ),
+        if (learner$id %in% sb_svm_probability_learner_ids()) {
+          "stormbreaker_bad_svm_selection_context"
+        } else "stormbreaker_bad_glmnet_selection_context"
+      )
+    }
+    tuning_x <- selection_context[["x"]]
+    tuning_selector <- selection_context[["selector"]]
+    tuning_fitted_selector <- selection_context[["fitted_selector"]]
+  }
+  if (learner$id %in% sb_svm_probability_learner_ids()) {
+    tuned <- sb_calibrate_svm_probability(tuning_x, endpoint$outcome,
+      learner$id, learner$params, patient_ids, group_ids, tuning_selector)
+    tuned$inner_selection_method <- sb_pipeline_inner_selection_method(pipeline)
+    return(list(
+      learner = sb_svm_calibrated_runtime_learner(learner, tuned$calibration),
+      tuning = tuned
+    ))
+  }
+  if (identical(learner[["id"]], "glmnet_cox")) {
+    tuned <- sb_select_glmnet_cox_lambda(
+      tuning_x,
+      endpoint[["time"]],
+      endpoint[["event"]],
+      inner_folds = learner[["params"]][["inner_folds"]],
+      seed = learner[["params"]][["inner_seed"]],
+      alpha = learner[["params"]][["alpha"]],
+      standardize = learner[["params"]][["standardize"]],
+      selector = tuning_selector,
+      fitted_selector = tuning_fitted_selector,
+      patient_ids = if (is.null(tuning_selector)) NULL else patient_ids,
+      selection_rule = learner[["params"]][["selection_rule"]],
+      measure = learner[["params"]][["measure"]],
+      group_ids = group_ids
+    )
+    tuned$inner_selection_method <- sb_pipeline_inner_selection_method(
+      pipeline
+    )
+    names(tuned$fold_id) <- as.character(patient_ids)
+    return(list(
+      learner = sb_glmnet_cox_learner_adapter(
+        alpha = tuned$alpha,
+        lambda = tuned$lambda,
+        standardize = tuned$standardize
+      ),
+      tuning = tuned
+    ))
+  }
+  if (identical(learner[["id"]], "glmnet_logistic")) {
+    tuned <- sb_select_glmnet_logistic_lambda(
+      tuning_x,
+      endpoint[["outcome"]],
+      inner_folds = learner[["params"]][["inner_folds"]],
+      seed = learner[["params"]][["inner_seed"]],
+      alpha = learner[["params"]][["alpha"]],
+      standardize = learner[["params"]][["standardize"]],
+      selector = tuning_selector,
+      fitted_selector = tuning_fitted_selector,
+      patient_ids = if (is.null(tuning_selector)) NULL else patient_ids,
+      selection_rule = learner[["params"]][["selection_rule"]],
+      measure = learner[["params"]][["measure"]],
+      group_ids = group_ids
+    )
+    tuned$inner_selection_method <- sb_pipeline_inner_selection_method(
+      pipeline
+    )
+    names(tuned$fold_id) <- as.character(patient_ids)
+    return(list(
+      learner = sb_glmnet_logistic_learner_adapter(
+        alpha = tuned$alpha,
+        lambda = tuned$lambda,
+        standardize = tuned$standardize
+      ),
+      tuning = tuned
+    ))
+  }
+  list(learner = learner, tuning = NULL)
+}
+
+sb_fit_runtime_learner <- function(learner, x, endpoint) {
+  task_type <- endpoint[["task_type"]]
+  if (identical(task_type, "survival")) {
+    return(learner[["fit"]](
+      x,
+      endpoint[["time"]],
+      endpoint[["event"]]
+    ))
+  }
+  if (identical(task_type, "binary")) {
+    return(learner[["fit"]](x, endpoint[["outcome"]]))
+  }
+  sb_abort(
+    "The runtime endpoint type is not supported.",
+    "stormbreaker_bad_runtime_endpoint"
+  )
 }

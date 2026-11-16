@@ -13,4 +13,5 @@ Survival time: months; event 1 means observed event, 0 means censoring.
 All files use gene_a, gene_b and gene_c as example predictors.
 The generators belong to the 0.3.44 implementation retained in 0.3.45.
 
-Regeneration: examples/regenerate-demo-data.R (writes only to a new caller-selected directory).
+Regeneration: source examples/advanced-examples.R and call
+regenerate_demo_data(directory) with a new caller-selected directory.

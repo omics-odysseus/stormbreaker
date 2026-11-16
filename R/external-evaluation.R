@@ -1,3 +1,201 @@
+#' External evaluation
+#' @name sb_evaluate_external
+#' @description Evaluate saved predictions against independent outcomes and summarize explicit decision thresholds.
+#' @rawRd \arguments{
+#' \item{prediction}{
+#' A successful \code{stormbreaker_final_prediction} returned by
+#' \code{\link[=sb_predict_final]{sb_predict_final()}}, \code{\link[=sb_predict_stack_final]{sb_predict_stack_final()}}, or
+#' \code{\link[=sb_predict_signature]{sb_predict_signature()}}.
+#' }
+#' \item{endpoint}{
+#' An outcome-only object returned by \code{\link[=sb_binary_endpoint]{sb_binary_endpoint()}} or
+#' \code{\link[=sb_surv_endpoint]{sb_surv_endpoint()}} with exactly the same patient IDs.
+#' }
+#' \item{reverse}{
+#' \code{FALSE} (default) keeps the development-defined direction.
+#' For binary outcomes, explicit \code{TRUE} uses cohort outcomes to flip
+#' probabilities when AUC < 0.5. Survival outcomes require \code{FALSE}.
+#' }
+#' \item{x}{
+#' Saved binary CV or external results, or a named collection.
+#' }
+#' \item{thresholds}{
+#' Explicit numeric probabilities in \verb{[0, 1]}. Equal scores
+#' are classified together: probability greater than or equal to threshold
+#' means positive. No threshold is selected or optimized.
+#' }
+#' \item{cohort_label}{
+#' Optional cohort display label.
+#' }
+#' \item{breaks}{
+#' Increasing bin boundaries, starting at zero and ending at one.
+#' }
+#' }
+#' @rawRd \value{See the individual entries in Function reference.}
+#' @rawRd \section{Function reference}{
+#' \subsection{\code{sb_evaluate_external()}}{
+#' \code{sb_evaluate_external()} accepts a completed endpoint-free prediction from
+#' \code{\link[=sb_predict_final]{sb_predict_final()}} or \code{\link[=sb_predict_signature]{sb_predict_signature()}} and a separate outcome-only
+#' object from
+#' \code{\link[=sb_binary_endpoint]{sb_binary_endpoint()}} or \code{\link[=sb_surv_endpoint]{sb_surv_endpoint()}}. Patients must match exactly
+#' by ID. Outcomes are attached only after prediction.
+#' This function has no access to a fit or pipeline
+#' runtime and never refits, re-predicts, recalibrates, derives a threshold, or
+#' selects a model.
+#' The returned \code{scored_predictions} table follows the external endpoint's row
+#' order after exact character-ID matching, which may differ from prediction
+#' input order. This choice is recorded in \code{patient_match$output_order}.
+#' 
+#' \strong{Returns:} A \code{stormbreaker_external_evaluation} containing ID-aligned endpoint
+#' and prediction values, task-specific point-estimate metrics, the evaluation
+#' boundary audit, and explicit incomplete or failed status.
+#' 
+#' \strong{Details:} Binary evaluation reports external-cohort ROC AUC, non-interpolated average
+#' precision, Brier score, unclipped log loss, observed-to-expected mean
+#' calibration, descriptive weak-calibration intercept/slope, and a separate
+#' moderate-calibration curve. Binary O:E is the observed event proportion
+#' divided by mean predicted event probability and targets one. It is distinct
+#' from the calibration intercept and cannot diagnose miscalibration within the
+#' prediction range. A zero expected event count or a numerically non-finite
+#' ratio leaves O:E unavailable without clipping or continuity correction. The
+#' binary curve is a three-knot restricted natural cubic spline logistic model
+#' of outcome on
+#' \code{qlogis(probability)} and reports ICI, E50, and E90. Exact probabilities zero
+#' or one are not clipped and leave only this finite-logit curve unavailable.
+#' Complete or quasi-complete separation likewise leaves the curve unavailable,
+#' including when logistic IRLS reports numerical convergence. The curve is
+#' descriptive and is never applied as recalibration. When the development task
+#' declared decision thresholds, binary evaluation also reports net benefit at
+#' those unchanged thresholds using the action rule \code{probability >= threshold},
+#' with treat-all and treat-none references. The same TP/FP/TN/FN counts report
+#' sensitivity, specificity, positive predictive value, and negative predictive
+#' value. Zero denominators remain \code{NA}; predictive values retain the external
+#' cohort prevalence. The function does not optimize, smooth, integrate, or
+#' recommend a threshold. Survival
+#' evaluation reports pooled Harrell C. If the saved
+#' prediction contains a horizon, it also reports an IPCW Brier score, a
+#' cumulative/dynamic time-dependent AUC, and truncated Uno IPCW concordance
+#' using the external endpoint's marginal reverse Kaplan-Meier censoring
+#' distribution. For time-dependent AUC, the
+#' marker is \code{1 - S(t)}, observed events at or before the locked horizon are
+#' cases, patients followed strictly beyond it are controls, and patients
+#' censored at or before it are excluded. Cases receive inverse censoring
+#' weights immediately before their event times and exact marker ties receive
+#' half credit. This relies on the marginal non-informative censoring
+#' assumption. Uno C instead uses the saved risk score: an eligible index has an
+#' observed event strictly before the horizon, later observed times and
+#' censoring at the same recorded time are comparators, and its weight is
+#' 1 / G(T-)^2. Events tied at the same time are not compared, while exact risk
+#' ties receive half credit. It does not use the survival probability.
+#' If the horizon prediction also carries study-declared event-
+#' risk thresholds, external evaluation reports a survival decision curve using
+#' \code{1 - survival_probability >= threshold}. It estimates event probability at
+#' the horizon by Kaplan-Meier within each threshold-selected external group,
+#' multiplies by the selected fraction, and reports treat-all and treat-none
+#' references. A nonempty group ending follow-up before the horizon is
+#' unavailable unless its Kaplan-Meier survival already equals the absorbing
+#' value zero. This point estimator assumes independent non-informative
+#' censoring in the relevant risk groups and censoring independent of model
+#' predictors. It is distinct from the marginal IPCW estimators and never
+#' refits or changes a prediction. The same locked predictions and aligned
+#' external outcomes also
+#' enter a descriptive moderate-calibration curve: a three-knot restricted
+#' natural cubic spline of \code{log(-log(S(t)))} is fitted in an Efron Cox model
+#' using complete right-censored follow-up, and the curve is read at the locked
+#' horizon. ICI, E50, and E90 summarize absolute error on the survival-
+#' probability scale. This assumes proportional hazards and independent
+#' non-informative censoring. The curve is not applied as recalibration,
+#' probabilities are not clipped or changed, no universal acceptable cutoff is
+#' asserted, and it remains separate from weak calibration. At the same locked
+#' horizon, mean calibration is the Kaplan-Meier observed event probability
+#' divided by mean predicted event probability (O:E), while the calibration
+#' slope is the coefficient from an Efron Cox model after administrative
+#' censoring at the horizon on \code{log(-log(survival_probability))}. Both target 1.
+#' Exact boundary or constant predictions can leave only the slope unavailable;
+#' unsupported Kaplan-Meier follow-up can leave only the mean ratio unavailable.
+#' No probability is clipped or recalibrated, and no survival calibration
+#' intercept, p value, or universal cutoff is reported. The slope assumes a
+#' proportional-hazards recalibration relation, and both components assume
+#' independent non-informative censoring. A calibration failure does not erase
+#' otherwise valid external metrics.
+#' No event-Kaplan-Meier reference or Brier skill score is fitted.
+#' 
+#' Exact ID matching cannot prove that cohorts are independent or that outcome
+#' definitions, time origins, eligibility, predictor measurement, and upstream
+#' preprocessing are comparable and outcome-blind. Those study-design
+#' conditions remain the researcher's responsibility. Returned values are
+#' point estimates for the supplied endpoint. Time-dependent AUC measures
+#' discrimination, Brier score measures overall prediction error, and the curve
+#' measures calibration; none of these metrics by themselves
+#' proves transportability, clinical utility, significance, or a decision
+#' threshold. A decision curve is a point-estimate clinical-utility analysis;
+#' this function does not derive a threshold, report decision-curve uncertainty,
+#' or prove that an action is clinically effective.
+#' 
+#' For ordinary Cox final predictions whose probabilities round to zero or one,
+#' the optional log_cumulative_hazard column preserves log(H0(h)) + x beta from
+#' the saved model when finite. External time AUC and complementary-log-log
+#' calibration, including bootstrap, use this monotone scale. Probabilities,
+#' Brier scores and decision curves are not clipped or changed. Without this
+#' saved scale, boundary-probability calibration keeps its existing unavailable
+#' status; arbitrary risk scores are never substituted.
+#' }
+#' 
+#' \subsection{\code{sb_threshold_metrics()}}{
+#' Evaluate explicit binary decision thresholds without selecting one
+#' 
+#' \strong{Returns:} A list with aggregate \code{table}, \code{diagnostics}, and saved metrics.
+#' Folds and cohorts remain separate. Undefined ratios are NA, not zero.
+#' Patient identifiers are not included in the returned tables.
+#' \code{kappa} is Cohen's chance-corrected agreement at each threshold; it can
+#' be negative and is NA when expected agreement is one.
+#' }
+#' 
+#' \subsection{\code{sb_probability_distribution()}}{
+#' Summarize saved binary probabilities by observed class
+#' 
+#' \strong{Returns:} Aggregate bin counts and within-class fractions, group diagnostics,
+#' and bin rules. Bins are left-closed, right-open except the last bin, which
+#' includes one. No patient identifiers, model refitting, or smoothing.
+#' }
+#' }
+#' @rawRd \references{
+#' Vickers AJ, Cronin AM, Elkin EB, Gonen M (2008). Extensions to
+#' decision curve analysis. \emph{BMC Medical Informatics and Decision Making},
+#' 8, 53. \doi{10.1186/1472-6947-8-53}.
+#' 
+#' McLernon DJ, Giardiello D, Van Calster B, et al. (2023). Assessing
+#' performance and clinical usefulness in prediction models with survival
+#' outcomes: practical guidance for Cox proportional hazards models.
+#' \emph{Annals of Internal Medicine}, 176(1), 105-114.
+#' \doi{10.7326/M22-0844}.
+#' 
+#' Uno H, Cai T, Pencina MJ, D'Agostino RB, Wei LJ (2011). On the C-statistics
+#' for evaluating overall adequacy of risk prediction procedures with
+#' censored survival data. \emph{Statistics in Medicine}, 30(10), 1105-1117.
+#' \doi{10.1002/sim.4154}.
+#' }
+#' @rawRd \examples{
+#' # sb_evaluate_external
+#' development <- sb_example_binary(n = 30, seed = 1)
+#' task <- sb_binary_task(
+#'   development, "patient_id", "outcome", c("gene_a", "gene_b")
+#' )
+#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
+#' external <- sb_example_binary(n = 10, seed = 2)
+#' external$patient_id <- paste0("external_", seq_len(nrow(external)))
+#' prediction <- sb_predict_final(
+#'   fit,
+#'   external[c("patient_id", "gene_a", "gene_b")],
+#'   "patient_id"
+#' )
+#' endpoint <- sb_binary_endpoint(external, "patient_id", "outcome")
+#' sb_evaluate_external(prediction, endpoint)
+#' }
+NULL
+
+# ---- external-evaluation ----
+
 sb_external_attempt <- function(code) {
   tryCatch(
     list(value = force(code), error = NULL),
@@ -454,155 +652,9 @@ sb_external_evaluation_failure <- function(
   result
 }
 
-#' Evaluate precomputed final predictions against an external endpoint
-#'
-#' `sb_evaluate_external()` accepts a completed endpoint-free prediction from
-#' [sb_predict_final()] or [sb_predict_signature()] and a separate outcome-only
-#' object from
-#' [sb_binary_endpoint()] or [sb_surv_endpoint()]. Patients must match exactly
-#' by ID. Outcomes are attached only after prediction.
-#' This function has no access to a fit or pipeline
-#' runtime and never refits, re-predicts, recalibrates, derives a threshold, or
-#' selects a model.
-#' The returned `scored_predictions` table follows the external endpoint's row
-#' order after exact character-ID matching, which may differ from prediction
-#' input order. This choice is recorded in `patient_match$output_order`.
-#'
-#' Binary evaluation reports external-cohort ROC AUC, non-interpolated average
-#' precision, Brier score, unclipped log loss, observed-to-expected mean
-#' calibration, descriptive weak-calibration intercept/slope, and a separate
-#' moderate-calibration curve. Binary O:E is the observed event proportion
-#' divided by mean predicted event probability and targets one. It is distinct
-#' from the calibration intercept and cannot diagnose miscalibration within the
-#' prediction range. A zero expected event count or a numerically non-finite
-#' ratio leaves O:E unavailable without clipping or continuity correction. The
-#' binary curve is a three-knot restricted natural cubic spline logistic model
-#' of outcome on
-#' `qlogis(probability)` and reports ICI, E50, and E90. Exact probabilities zero
-#' or one are not clipped and leave only this finite-logit curve unavailable.
-#' Complete or quasi-complete separation likewise leaves the curve unavailable,
-#' including when logistic IRLS reports numerical convergence. The curve is
-#' descriptive and is never applied as recalibration. When the development task
-#' declared decision thresholds, binary evaluation also reports net benefit at
-#' those unchanged thresholds using the action rule `probability >= threshold`,
-#' with treat-all and treat-none references. The same TP/FP/TN/FN counts report
-#' sensitivity, specificity, positive predictive value, and negative predictive
-#' value. Zero denominators remain `NA`; predictive values retain the external
-#' cohort prevalence. The function does not optimize, smooth, integrate, or
-#' recommend a threshold. Survival
-#' evaluation reports pooled Harrell C. If the saved
-#' prediction contains a horizon, it also reports an IPCW Brier score, a
-#' cumulative/dynamic time-dependent AUC, and truncated Uno IPCW concordance
-#' using the external endpoint's marginal reverse Kaplan-Meier censoring
-#' distribution. For time-dependent AUC, the
-#' marker is `1 - S(t)`, observed events at or before the locked horizon are
-#' cases, patients followed strictly beyond it are controls, and patients
-#' censored at or before it are excluded. Cases receive inverse censoring
-#' weights immediately before their event times and exact marker ties receive
-#' half credit. This relies on the marginal non-informative censoring
-#' assumption. Uno C instead uses the saved risk score: an eligible index has an
-#' observed event strictly before the horizon, later observed times and
-#' censoring at the same recorded time are comparators, and its weight is
-#' 1 / G(T-)^2. Events tied at the same time are not compared, while exact risk
-#' ties receive half credit. It does not use the survival probability.
-#' If the horizon prediction also carries study-declared event-
-#' risk thresholds, external evaluation reports a survival decision curve using
-#' `1 - survival_probability >= threshold`. It estimates event probability at
-#' the horizon by Kaplan-Meier within each threshold-selected external group,
-#' multiplies by the selected fraction, and reports treat-all and treat-none
-#' references. A nonempty group ending follow-up before the horizon is
-#' unavailable unless its Kaplan-Meier survival already equals the absorbing
-#' value zero. This point estimator assumes independent non-informative
-#' censoring in the relevant risk groups and censoring independent of model
-#' predictors. It is distinct from the marginal IPCW estimators and never
-#' refits or changes a prediction. The same locked predictions and aligned
-#' external outcomes also
-#' enter a descriptive moderate-calibration curve: a three-knot restricted
-#' natural cubic spline of `log(-log(S(t)))` is fitted in an Efron Cox model
-#' using complete right-censored follow-up, and the curve is read at the locked
-#' horizon. ICI, E50, and E90 summarize absolute error on the survival-
-#' probability scale. This assumes proportional hazards and independent
-#' non-informative censoring. The curve is not applied as recalibration,
-#' probabilities are not clipped or changed, no universal acceptable cutoff is
-#' asserted, and it remains separate from weak calibration. At the same locked
-#' horizon, mean calibration is the Kaplan-Meier observed event probability
-#' divided by mean predicted event probability (O:E), while the calibration
-#' slope is the coefficient from an Efron Cox model after administrative
-#' censoring at the horizon on `log(-log(survival_probability))`. Both target 1.
-#' Exact boundary or constant predictions can leave only the slope unavailable;
-#' unsupported Kaplan-Meier follow-up can leave only the mean ratio unavailable.
-#' No probability is clipped or recalibrated, and no survival calibration
-#' intercept, p value, or universal cutoff is reported. The slope assumes a
-#' proportional-hazards recalibration relation, and both components assume
-#' independent non-informative censoring. A calibration failure does not erase
-#' otherwise valid external metrics.
-#' No event-Kaplan-Meier reference or Brier skill score is fitted.
-#'
-#' Exact ID matching cannot prove that cohorts are independent or that outcome
-#' definitions, time origins, eligibility, predictor measurement, and upstream
-#' preprocessing are comparable and outcome-blind. Those study-design
-#' conditions remain the researcher's responsibility. Returned values are
-#' point estimates for the supplied endpoint. Time-dependent AUC measures
-#' discrimination, Brier score measures overall prediction error, and the curve
-#' measures calibration; none of these metrics by themselves
-#' proves transportability, clinical utility, significance, or a decision
-#' threshold. A decision curve is a point-estimate clinical-utility analysis;
-#' this function does not derive a threshold, report decision-curve uncertainty,
-#' or prove that an action is clinically effective.
-#'
-#' @references Vickers AJ, Cronin AM, Elkin EB, Gonen M (2008). Extensions to
-#'   decision curve analysis. *BMC Medical Informatics and Decision Making*,
-#'   8, 53. \doi{10.1186/1472-6947-8-53}.
-#'
-#' McLernon DJ, Giardiello D, Van Calster B, et al. (2023). Assessing
-#'   performance and clinical usefulness in prediction models with survival
-#'   outcomes: practical guidance for Cox proportional hazards models.
-#'   *Annals of Internal Medicine*, 176(1), 105-114.
-#'   \doi{10.7326/M22-0844}.
-#'
-#' Uno H, Cai T, Pencina MJ, D'Agostino RB, Wei LJ (2011). On the C-statistics
-#'   for evaluating overall adequacy of risk prediction procedures with
-#'   censored survival data. *Statistics in Medicine*, 30(10), 1105-1117.
-#'   \doi{10.1002/sim.4154}.
-#'
-#' @param prediction A successful `stormbreaker_final_prediction` returned by
-#'   [sb_predict_final()], [sb_predict_stack_final()], or
-#'   [sb_predict_signature()].
-#' @param endpoint An outcome-only object returned by [sb_binary_endpoint()] or
-#'   [sb_surv_endpoint()] with exactly the same patient IDs.
-#' @param reverse For binary outcomes, `TRUE` (default) uses cohort outcomes to
-#'   flip probabilities when AUC < 0.5; `FALSE` keeps direction, and survival
-#'   outcomes require `FALSE` (used when omitted).
-#'
-#' @return A `stormbreaker_external_evaluation` containing ID-aligned endpoint
-#'   and prediction values, task-specific point-estimate metrics, the evaluation
-#'   boundary audit, and explicit incomplete or failed status.
-#' @details
-#' For ordinary Cox final predictions whose probabilities round to zero or one,
-#' the optional log_cumulative_hazard column preserves log(H0(h)) + x beta from
-#' the saved model when finite. External time AUC and complementary-log-log
-#' calibration, including bootstrap, use this monotone scale. Probabilities,
-#' Brier scores and decision curves are not clipped or changed. Without this
-#' saved scale, boundary-probability calibration keeps its existing unavailable
-#' status; arbitrary risk scores are never substituted.
+#' @rdname sb_evaluate_external
 #' @export
-#'
-#' @examples
-#' development <- sb_example_binary(n = 30, seed = 1)
-#' task <- sb_binary_task(
-#'   development, "patient_id", "outcome", c("gene_a", "gene_b")
-#' )
-#' fit <- sb_fit_final(task, sb_pipeline(learner = "logistic"))
-#' external <- sb_example_binary(n = 10, seed = 2)
-#' external$patient_id <- paste0("external_", seq_len(nrow(external)))
-#' prediction <- sb_predict_final(
-#'   fit,
-#'   external[c("patient_id", "gene_a", "gene_b")],
-#'   "patient_id"
-#' )
-#' endpoint <- sb_binary_endpoint(external, "patient_id", "outcome")
-#' sb_evaluate_external(prediction, endpoint)
-sb_evaluate_external <- function(prediction, endpoint, reverse = TRUE) {
+sb_evaluate_external <- function(prediction, endpoint, reverse = FALSE) {
   if (missing(reverse) && inherits(endpoint, "stormbreaker_surv_endpoint")) {
     reverse <- FALSE
   }
@@ -979,4 +1031,488 @@ print.stormbreaker_external_evaluation <- function(x, ...) {
     }
   }
   invisible(x)
+}
+
+# ---- external-inputs ----
+
+# ---- external-endpoint ----
+
+sb_select_endpoint_columns <- function(data, roles) {
+  if (!is.data.frame(data)) {
+    sb_abort("`data` must be a data.frame.", "stormbreaker_bad_data")
+  }
+  if (nrow(data) < 1L) {
+    sb_abort(
+      "An evaluation endpoint must contain at least one patient.",
+      "stormbreaker_empty_endpoint"
+    )
+  }
+
+  role_positions <- lapply(roles, function(role) which(names(data) == role))
+  missing <- names(roles)[lengths(role_positions) == 0L]
+  if (length(missing) > 0L) {
+    sb_abort(
+      paste0(
+        "Missing endpoint columns: ",
+        paste(unname(roles[missing]), collapse = ", "),
+        "."
+      ),
+      "stormbreaker_missing_endpoint_columns"
+    )
+  }
+  duplicated <- names(roles)[lengths(role_positions) > 1L]
+  if (length(duplicated) > 0L) {
+    sb_abort(
+      paste0(
+        "Endpoint columns are duplicated: ",
+        paste(unname(roles[duplicated]), collapse = ", "),
+        "."
+      ),
+      "stormbreaker_duplicate_endpoint_column"
+    )
+  }
+
+  positions <- vapply(role_positions, `[[`, integer(1), 1L)
+  selected <- data[positions]
+  names(selected) <- unname(roles)
+  selected
+}
+
+sb_validate_endpoint_ids <- function(id) {
+  patient_ids <- as.character(id)
+  if (anyNA(patient_ids) || any(!nzchar(trimws(patient_ids)))) {
+    sb_abort(
+      "Patient identifiers contain missing or blank values.",
+      "stormbreaker_bad_id"
+    )
+  }
+  if (anyDuplicated(patient_ids)) {
+    sb_abort(
+      "Patient identifiers must be unique.",
+      "stormbreaker_duplicate_id"
+    )
+  }
+  invisible(TRUE)
+}
+
+sb_validate_endpoint_time_unit <- function(time_unit) {
+  valid <- is.character(time_unit) && length(time_unit) == 1L &&
+    !is.na(time_unit) && time_unit %in% c("day", "month", "year")
+  if (!valid) {
+    sb_abort(
+      "`time_unit` must be exactly 'day', 'month', or 'year'.",
+      "stormbreaker_bad_time_unit"
+    )
+  }
+  time_unit
+}
+
+sb_validate_endpoint_horizon <- function(prediction_horizon) {
+  if (is.null(prediction_horizon)) {
+    return(NULL)
+  }
+  valid <- is.numeric(prediction_horizon) &&
+    length(prediction_horizon) == 1L &&
+    !is.na(prediction_horizon) && is.finite(prediction_horizon) &&
+    prediction_horizon > 0
+  if (!valid) {
+    sb_abort(
+      "`prediction_horizon` must be one finite positive number.",
+      "stormbreaker_bad_prediction_horizon"
+    )
+  }
+  as.numeric(prediction_horizon)
+}
+
+#' @rdname sb_binary_task
+#' @export
+sb_binary_endpoint <- function(data, id_col, outcome_col) {
+  sb_check_name(id_col, "id_col")
+  sb_check_name(outcome_col, "outcome_col")
+  if (identical(id_col, outcome_col)) {
+    sb_abort(
+      "ID and outcome must use different columns.",
+      "stormbreaker_overlapping_endpoint_roles"
+    )
+  }
+
+  selected <- sb_select_endpoint_columns(
+    data,
+    c(id = id_col, outcome = outcome_col)
+  )
+  sb_validate_endpoint_ids(selected[[id_col]])
+  outcome <- selected[[outcome_col]]
+  valid_outcome <- (is.numeric(outcome) || is.logical(outcome)) &&
+    !anyNA(outcome) &&
+    (!is.numeric(outcome) || all(is.finite(outcome))) &&
+    all(outcome %in% c(0, 1))
+  if (!valid_outcome) {
+    sb_abort(
+      "`outcome` must contain only finite 0/1 values.",
+      "stormbreaker_bad_binary_outcome"
+    )
+  }
+
+  endpoint <- list(
+    data = selected,
+    id_col = id_col,
+    outcome_col = outcome_col,
+    positive_class = 1L,
+    negative_class = 0L,
+    n = as.integer(nrow(selected)),
+    n_positive = as.integer(sum(outcome == 1)),
+    n_negative = as.integer(sum(outcome == 0)),
+    independent_unit = "patient"
+  )
+  class(endpoint) <- "stormbreaker_binary_endpoint"
+  endpoint
+}
+
+sb_validate_binary_endpoint_contract <- function(endpoint) {
+  metadata_fields <- c(
+    "id_col", "outcome_col", "positive_class", "negative_class",
+    "n", "n_positive", "n_negative", "independent_unit"
+  )
+  required_fields <- c("data", metadata_fields)
+  valid_object <- inherits(endpoint, "stormbreaker_binary_endpoint") &&
+    is.list(endpoint) &&
+    length(setdiff(required_fields, names(endpoint))) == 0L
+  if (!valid_object) {
+    sb_abort(
+      paste0(
+        "The binary endpoint is incomplete; recreate it with ",
+        "`sb_binary_endpoint()`."
+      ),
+      "stormbreaker_bad_endpoint"
+    )
+  }
+
+  validated <- sb_binary_endpoint(
+    endpoint$data,
+    endpoint$id_col,
+    endpoint$outcome_col
+  )
+  metadata_ok <- identical(
+    unclass(endpoint)[metadata_fields],
+    unclass(validated)[metadata_fields]
+  )
+  if (!metadata_ok) {
+    sb_abort(
+      paste0(
+        "The binary endpoint metadata changed; recreate it with ",
+        "`sb_binary_endpoint()`."
+      ),
+      "stormbreaker_mutated_endpoint"
+    )
+  }
+  validated
+}
+
+#' @export
+print.stormbreaker_binary_endpoint <- function(x, ...) {
+  cat("<stormbreaker_binary_endpoint>\n")
+  cat("outcome-only evaluation endpoint\n")
+  cat(
+    "Patients:", x$n,
+    "| Positive (1):", x$n_positive,
+    "| Negative (0):", x$n_negative, "\n"
+  )
+  cat("Outcome:", x$outcome_col, "\n")
+  invisible(x)
+}
+
+#' @rdname sb_binary_task
+#' @export
+sb_surv_endpoint <- function(data, id_col, time_col, event_col,
+                             time_unit, prediction_horizon = NULL) {
+  sb_check_name(id_col, "id_col")
+  sb_check_name(time_col, "time_col")
+  sb_check_name(event_col, "event_col")
+  roles <- c(id_col, time_col, event_col)
+  if (anyDuplicated(roles)) {
+    sb_abort(
+      "ID, time, and event must use three different columns.",
+      "stormbreaker_overlapping_endpoint_roles"
+    )
+  }
+  time_unit <- sb_validate_endpoint_time_unit(time_unit)
+  prediction_horizon <- sb_validate_endpoint_horizon(prediction_horizon)
+
+  selected <- sb_select_endpoint_columns(
+    data,
+    c(id = id_col, time = time_col, event = event_col)
+  )
+  sb_validate_endpoint_ids(selected[[id_col]])
+  time <- selected[[time_col]]
+  if (!is.numeric(time) || anyNA(time) || any(!is.finite(time)) ||
+      any(time < 0)) {
+    sb_abort(
+      "Survival time must contain finite, non-negative numeric values.",
+      "stormbreaker_bad_time"
+    )
+  }
+  event <- selected[[event_col]]
+  valid_event <- (is.numeric(event) || is.logical(event)) &&
+    !anyNA(event) &&
+    (!is.numeric(event) || all(is.finite(event))) &&
+    all(event %in% c(0, 1))
+  if (!valid_event) {
+    sb_abort(
+      "`event` must contain only finite 0/1 values.",
+      "stormbreaker_bad_event"
+    )
+  }
+
+  endpoint <- list(
+    data = selected,
+    id_col = id_col,
+    time_col = time_col,
+    event_col = event_col,
+    time_unit = time_unit,
+    n = as.integer(nrow(selected)),
+    n_events = as.integer(sum(event == 1)),
+    n_censored = as.integer(sum(event == 0)),
+    independent_unit = "patient"
+  )
+  if (!is.null(prediction_horizon)) {
+    endpoint <- append(
+      endpoint,
+      list(prediction_horizon = prediction_horizon),
+      after = match("time_unit", names(endpoint))
+    )
+  }
+  class(endpoint) <- "stormbreaker_surv_endpoint"
+  endpoint
+}
+
+sb_validate_surv_endpoint_contract <- function(endpoint) {
+  metadata_fields <- c(
+    "id_col", "time_col", "event_col", "time_unit", "n",
+    "n_events", "n_censored", "independent_unit"
+  )
+  if ("prediction_horizon" %in% names(endpoint)) {
+    metadata_fields <- append(
+      metadata_fields,
+      "prediction_horizon",
+      after = match("time_unit", metadata_fields)
+    )
+  }
+  required_fields <- c("data", metadata_fields)
+  valid_object <- inherits(endpoint, "stormbreaker_surv_endpoint") &&
+    is.list(endpoint) &&
+    length(setdiff(required_fields, names(endpoint))) == 0L
+  if (!valid_object) {
+    sb_abort(
+      paste0(
+        "The survival endpoint is incomplete; recreate it with ",
+        "`sb_surv_endpoint()`."
+      ),
+      "stormbreaker_bad_endpoint"
+    )
+  }
+
+  prediction_horizon <- if ("prediction_horizon" %in% names(endpoint)) {
+    endpoint[["prediction_horizon"]]
+  } else {
+    NULL
+  }
+  validated <- sb_surv_endpoint(
+    endpoint$data,
+    endpoint$id_col,
+    endpoint$time_col,
+    endpoint$event_col,
+    endpoint$time_unit,
+    prediction_horizon
+  )
+  metadata_ok <- identical(
+    unclass(endpoint)[metadata_fields],
+    unclass(validated)[metadata_fields]
+  )
+  if (!metadata_ok) {
+    sb_abort(
+      paste0(
+        "The survival endpoint metadata changed; recreate it with ",
+        "`sb_surv_endpoint()`."
+      ),
+      "stormbreaker_mutated_endpoint"
+    )
+  }
+  validated
+}
+
+#' @export
+print.stormbreaker_surv_endpoint <- function(x, ...) {
+  cat("<stormbreaker_surv_endpoint>\n")
+  cat("outcome-only evaluation endpoint\n")
+  cat(
+    "Patients:", x$n,
+    "| Events:", x$n_events,
+    "| Censored:", x$n_censored, "\n"
+  )
+  cat(
+    "Time:", x$time_col, "[", x$time_unit, "]",
+    "| Event:", x$event_col, "\n"
+  )
+  if ("prediction_horizon" %in% names(x)) {
+    cat(
+      "Prediction horizon:", format(x$prediction_horizon),
+      "[", x$time_unit, "]\n"
+    )
+  }
+  invisible(x)
+}
+
+# ---- external-result-table ----
+
+sb_result_cohort_label <- function(cohort_label) {
+  if (!is.null(cohort_label) &&
+      (!is.character(cohort_label) || length(cohort_label) != 1L ||
+       is.na(cohort_label) || !nzchar(trimws(cohort_label)))) {
+    sb_abort("`cohort_label` must be NULL or one non-empty string.",
+             "stormbreaker_bad_cohort_label")
+  }
+  if (is.null(cohort_label)) NA_character_ else cohort_label
+}
+
+sb_external_result_table <- function(x, component, metric, cohort_label) {
+  is_external <- function(value) inherits(value, "stormbreaker_external_evaluation")
+  results <- if (is_external(x)) list(x) else x$evaluations
+  if (!is.list(results) || length(results) == 0L ||
+      !all(vapply(results, is_external, logical(1)))) {
+    sb_abort("The comparison must contain supported external evaluations.",
+             "stormbreaker_bad_result_view")
+  }
+  label <- sb_result_cohort_label(cohort_label)
+  supported <- sb_scalar_view_metrics()
+  if (component == "metrics") {
+    if (!is.character(metric) || length(metric) != 1L ||
+        is.na(metric) || !metric %in% supported) {
+      sb_abort(paste0("Unsupported `metric`; explicitly choose one of: ",
+                      paste(supported, collapse = ", "), "."),
+               "stormbreaker_bad_result_metric")
+    }
+  } else if (!is.null(metric)) {
+    sb_abort('`metric` is only used for `component = "metrics"`; otherwise leave it NULL.',
+             "stormbreaker_unused_result_metric")
+  }
+  value_or <- function(value, default) if (is.null(value)) default else value
+  rows <- lapply(results, function(result) {
+    if (component == "predictions") {
+      tab <- result$scored_predictions
+      tab$task_type <- rep(result$task_type, nrow(tab))
+      tab$cohort_label <- rep(label, nrow(tab))
+      return(tab)
+    }
+    if (component == "runs") {
+      return(data.frame(
+        pipeline_id = result$pipeline_id, task_type = result$task_type,
+        status = result$status, cohort_label = label, n = result$n,
+        patient_match_status = result$patient_match$status,
+        error_stage = result$error_stage, error_class = result$error_class,
+        error_message = result$error_message, stringsAsFactors = FALSE
+      ))
+    }
+    if (metric %in% sb_horizon_view_metrics()) {
+      return(sb_horizon_metric_row(result, metric, result$task_type,
+        external = TRUE, cohort_label = cohort_label))
+    }
+    allowed <- if (identical(result$task_type, "binary")) supported[1:4] else "harrell_c"
+    value <- result$metrics[[metric]]
+    if (!metric %in% allowed ||
+        (is.null(value) && !identical(result$status, "failed"))) {
+      sb_abort(paste0("Metric `", metric, "` is not saved in pipeline `",
+                      result$pipeline_id, "`. No metric is recomputed by this function."),
+               "stormbreaker_result_metric_not_saved")
+    }
+    data.frame(
+      pipeline_id = result$pipeline_id, task_type = result$task_type,
+      metric = metric, estimate = value_or(value$estimate, NA_real_),
+      status = value_or(value$status, "not_saved"), run_status = result$status,
+      scope = value_or(value$scope, NA_character_),
+      aggregation = value_or(value$aggregation, NA_character_),
+      cohort_label = label,
+      patient_match_status = result$patient_match$status,
+      error_stage = result$error_stage, error_class = result$error_class,
+      error_message = result$error_message,
+      metric_error_class = value_or(value$error_class, NA_character_),
+      metric_error_message = value_or(value$error_message, NA_character_),
+      stringsAsFactors = FALSE
+    )
+  })
+  if (component == "predictions" && any(vapply(rows, nrow, integer(1)) > 0L)) {
+    rows <- rows[vapply(rows, nrow, integer(1)) > 0L]
+  }
+  output <- do.call(rbind, rows)
+  rownames(output) <- NULL
+  output
+}
+
+# ---- external-reverse ----
+
+sb_external_reverse_evaluation <- function(prediction, endpoint) {
+  original <- sb_evaluate_external(prediction, endpoint, reverse = FALSE)
+  if (identical(original$status, "failed")) {
+    return(original)
+  }
+  if (!identical(original$task_type, "binary")) {
+    sb_abort("`reverse = TRUE` supports binary evaluation only.",
+             "stormbreaker_bad_reverse")
+  }
+  auc <- original$metrics$roc_auc$estimate
+  evaluable <- identical(original$metrics$roc_auc$status, "success") &&
+    is.finite(auc)
+  reversed <- evaluable && auc < 0.5
+  result <- original
+  if (reversed) {
+    adjusted <- prediction
+    adjusted$predictions$probability <- 1 - adjusted$predictions$probability
+    result <- sb_evaluate_external(adjusted, endpoint, reverse = FALSE)
+  }
+  result$original_metrics <- original$metrics
+  result$original_scored_predictions <- original$scored_predictions
+  result$scored_predictions$probability_original <-
+    original$scored_predictions$probability
+  result$scored_predictions$reversed <- rep(reversed, nrow(result$scored_predictions))
+  result$direction_correction <- data.frame(
+    reverse = TRUE,
+    reversed = reversed,
+    status = if (evaluable) "success" else "not_evaluable",
+    auc_original = auc,
+    auc_processed = result$metrics$roc_auc$estimate,
+    label_use = "post_hoc_evaluation_label_direction_selection",
+    stringsAsFactors = FALSE
+  )
+  result$evaluation_boundary$direction_selection_uses_external_outcomes <- TRUE
+  result$evaluation_boundary$outcome_use <- "metrics_and_post_hoc_direction_selection"
+  result$evaluation_boundary$prediction_values_changed <- reversed
+  result$provenance$direction_correction <- result$direction_correction
+  result
+}
+
+# ---- prediction-variation ----
+
+sb_prediction_variation <- function(predictions, task_type) {
+  value_name <- if (identical(task_type, "binary")) "probability" else "risk"
+  diagnostic <- list(status = "incomplete", n = 0L, distinct_values = NA_integer_,
+    constant_folds = integer())
+  if (!is.data.frame(predictions) ||
+      !all(c("status", value_name) %in% names(predictions))) return(diagnostic)
+  diagnostic$n <- nrow(predictions)
+  values <- predictions[[value_name]]
+  if (!length(values) || !is.numeric(values) || anyNA(values) ||
+      any(!is.finite(values)) || anyNA(predictions$status) ||
+      any(predictions$status != "success")) return(diagnostic)
+  diagnostic$distinct_values <- length(unique(values))
+  folds <- if ("fold" %in% names(predictions)) predictions$fold else rep(1L, length(values))
+  if (anyNA(folds)) return(diagnostic)
+  fold_ids <- sort(unique(folds))
+  sizes <- vapply(fold_ids, function(fold) sum(folds == fold), integer(1))
+  constant <- vapply(fold_ids, function(fold) {
+    x <- values[folds == fold]
+    length(x) >= 2L && all(x == x[1L])
+  }, logical(1))
+  diagnostic$constant_folds <- fold_ids[constant]
+  diagnostic$status <- if (all(sizes < 2L)) "insufficient_patients" else
+    if (all(constant)) "constant" else if (any(constant)) "partly_constant" else "variable"
+  diagnostic
 }

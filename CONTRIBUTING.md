@@ -29,7 +29,7 @@ Build and check the package:
 
 ```text
 R CMD build --no-manual .
-R CMD check --no-manual stormbreaker_0.3.47.tar.gz
+R CMD check --no-manual stormbreaker_0.3.47.1.tar.gz
 ```
 
 Tutorial building needs knitr, rmarkdown, markdown and Pandoc. The six runnable
