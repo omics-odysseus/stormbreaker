@@ -572,7 +572,7 @@ sb_ahaz_diagnostics <- function(fit, type = "coefficients") {
     learner = s$learner, pipeline_id = fit$pipeline$id,
     source = "original ahaz additive-hazard coefficients and saved native BIC path",
     interpretation = paste("Original input-unit additive-hazard coefficients, not log hazard ratios or causal effects.",
-      "Native BIC is the original selection criterion, not held-out performance; marked lambda is the original choice.",
+      "Native BIC describes selection on the development data; the marked lambda is the original choice.",
       "Full path and zero coefficients retained, without refitting or uncertainty reconstruction.",
       "Any separate saved Cox-Breslow probability calibration is not represented by these raw coefficients.")),
     class = "stormbreaker_algorithm_diagnostic")

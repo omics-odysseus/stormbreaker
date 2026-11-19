@@ -78,7 +78,7 @@ sb_boosting_diagnostics <- function(fit, type = "training_loss", max_pairs = 20L
   structure(list(type = paste0("boosting_", type), table = tab, selections = selections,
     learner = learner, pipeline_id = fit$pipeline$id, stopping_iteration = as.integer(stop),
     measure = measure, source = "original saved mboost engine; no additional fitting",
-    validation_scope = "in-bag development training, not held-out evaluation"),
+    validation_scope = "in-bag development training"),
     class = "stormbreaker_algorithm_diagnostic")
 }
 

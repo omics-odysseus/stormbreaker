@@ -98,11 +98,11 @@
 #' state, prediction semantics (including any declared decision
 #' thresholds), provenance, and any execution failure.
 #' 
-#' \strong{Details:} This operation does not estimate out-of-fold or external performance, does
-#' not compare pipelines, and does not select a winner. The pipeline must be an
-#' explicit specification created by \code{\link[=sb_pipeline]{sb_pipeline()}}. Execution failures are
-#' returned as stage-aware failed fit objects without substituting another
-#' selector or learner.
+#' \strong{Details:} Pass the chosen \code{\link[=sb_pipeline]{sb_pipeline()}} specification
+#' to fit that exact route on all rows of the training task. A failed fit records
+#' the submitted route and the stage where execution stopped. Use
+#' \code{\link[=sb_compare_cv]{sb_compare_cv()}} to compare candidates and
+#' \code{\link[=sb_evaluate_external]{sb_evaluate_external()}} to evaluate the final predictions.
 #' }
 #' 
 #' \subsection{\code{sb_predict_final()}}{

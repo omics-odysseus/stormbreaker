@@ -1,11 +1,10 @@
-# Source this file to define the examples; no model is trained on loading.
-# List names with advanced_examples(); run one with run_advanced_example(name).
-# Each call returns its local objects. Choose a fresh working/output directory
-# for examples that explicitly export files. Synthetic data regeneration is opt-in.
+# Source this file, list examples with advanced_examples(), and run one with
+# run_advanced_example(name). Each example returns its objects.
+# Choose a new output directory when exporting results.
 
 # ---- regenerate-demo-data ----
 
-# Synthetic inputs only. Source this file, then call regenerate_demo_data("new-directory").
+# Create synthetic inputs with regenerate_demo_data("new-directory").
 regenerate_demo_data <- function(directory) {
   if (file.exists(directory)) stop("Choose a new directory; existing files are not overwritten.")
   specs <- data.frame(
@@ -32,12 +31,10 @@ regenerate_demo_data <- function(directory) {
 
 # ---- user-workflow ----
 
-# Source this file to define helpers; sourcing does not fit or select a model.
-# All generated templates/demo results are SYNTHETIC, not clinical evidence.
-# Requires an installed stormbreaker package. See guides/user-guide.md.
+# See guides/user-guide.md for the file-based workflow.
 
 workflow_new_directory <- function(path) {
-  # Output files can contain patient data; never replace an existing run.
+  # Use a new directory for each run.
   if (file.exists(path)) stop("Choose a new output directory: ", path)
   if (!dir.create(path, recursive = TRUE)) stop("Cannot create: ", path)
   normalizePath(path, winslash = "/", mustWork = TRUE)
@@ -209,10 +206,10 @@ workflow_finalize <- function(development_rds, selected_candidate, selection_rea
   fit <- stormbreaker::fit_final(state$task, state$pipelines[[selected_candidate]])
   if (!identical(fit$status, "success")) stop("Final fit failed; no replacement model.")
   saveRDS(fit, file.path(directory, "final_model.rds"))
-  # Reload the artifact to demonstrate that prediction does not require refitting.
+  # Reload the fitted model and apply it to the external predictors.
   fit <- readRDS(file.path(directory, "final_model.rds"))
   new_data <- workflow_read_csv(external_predictors_csv)
-  # Deliberately supply only the identifier and the declared predictors.
+  # Select the identifier and declared predictor columns.
   new_data <- new_data[c("patient_id", state$predictors)]
   prediction <- stormbreaker::predict_final(fit, new_data, id_col = "patient_id")
   saveRDS(prediction, file.path(directory, "external_predictions.rds"))
@@ -258,11 +255,11 @@ workflow_demo <- function(output_dir) {
       development_dir,
       kind = kind
     )
-    # Synthetic demonstration ONLY: enact the predeclared suggestion.
-    # Real projects stop after workflow_develop for human review and confirmation.
+    # Apply the declared rule here; review development results before
+    # choosing the route for your own study.
     results[[kind]] <- workflow_finalize(file.path(development_dir, "development.rds"),
       selected_candidate = state$suggested_candidate,
-      selection_reason = "SYNTHETIC DEMO ONLY: enact predeclared near-tie/simplicity rule.",
+      selection_reason = "Applied the declared near-tie and simplicity rule to the synthetic data.",
       external_predictors_csv = file.path(input, paste0(kind, "_external_predictors.csv")),
       external_outcomes_csv = file.path(input, paste0(kind, "_external_outcomes.csv")),
       output_dir = file.path(directory, paste0(kind, "_final"))
@@ -273,7 +270,7 @@ workflow_demo <- function(output_dir) {
 
 # ---- visualization-core ----
 
-# STORMBREAKER 0.3.0 visualization tutorial. Synthetic data, not clinical evidence.
+# STORMBREAKER 0.3.0 visualization tutorial using synthetic data.
 # Requires stormbreaker and optional ggplot2 and metafor (for Meta-analysis).
 # Source this file, then call stormbreaker_visualization_example().
 # Pass a NEW output directory to export all figures and an offline gallery.
@@ -345,9 +342,7 @@ stormbreaker_visualization_example <- function(output_dir = NULL, reps = 40L) {
   # Bootstrap interval keys retain their saved name, ipcw_brier_score.
   plots$Survival_horizon_intervals <- plot_ext_ci(survival_bootstrap, "ipcw_brier_score")
   plots$No_selection_available <- plot_freq(cv$results[[1]])
-  # The small number of bootstrap replicates is for a fast software tutorial,
-  # not a recommended precision for research. Only three synthetic cohorts:
-  # pooled intervals and heterogeneity estimates are highly uncertain.
+  # Set reps to choose the bootstrap size for the three synthetic cohorts.
   if (!is.null(output_dir)) {
     if (file.exists(output_dir)) stop("Choose a new output directory; existing output is never overwritten.")
     if (!dir.create(output_dir, recursive = TRUE)) stop("Cannot create output directory.")
@@ -413,10 +408,10 @@ stormbreaker_clinical_example <- function(output_dir = NULL, figure_format = "pn
   cv <- run$comparison$comparison[match(ids, run$comparison$comparison$pipeline_id), , drop = FALSE]
   eligible <- which(cv$status == "success" & cv$roc_auc_status == "success" & is.finite(cv$roc_auc))
   if (!length(eligible)) stop("No candidate has a usable development-CV AUC.", call. = FALSE)
-  # which.max uses declared candidate order for ties. Do not pick on assessment data.
+  # Choose by development-fold AUC; ties follow the declared candidate order.
   locked <- names(candidates)[eligible[which.max(cv$roc_auc[eligible])]]
   finished <- finish_run(run, locked, external = list(Holdout = split$assessment),
-    plots = TRUE, reverse = FALSE)
+    plots = TRUE)
   evaluation <- finished$evaluations$Holdout
   if (!identical(finished$fit$status, "success") || !identical(evaluation$status, "success")) {
     stop("The locked candidate did not complete holdout evaluation; inspect its saved status.",
@@ -424,7 +419,7 @@ stormbreaker_clinical_example <- function(output_dir = NULL, figure_format = "pn
   }
   views <- clinical_plots(evaluation, thresholds = thresholds,
     confusion_threshold = threshold, detail = "full")
-  # The interval is for AUC, conditional on the locked model, not a curve band.
+  # Compute a patient bootstrap interval for the fitted model's AUC.
   views$plots$ROC <- plot_roc(evaluation, ci_reps = 500L, seed = 19L)
   auc_interval <- attr(views$plots$ROC, "stormbreaker_roc_statistics")
   at_threshold <- sb_threshold_metrics(evaluation, threshold)$table
@@ -444,7 +439,7 @@ stormbreaker_clinical_example <- function(output_dir = NULL, figure_format = "pn
   distribution <- rbind(
     data.frame(split = split$counts$role, outcome = "0", n = split$counts$n_negative),
     data.frame(split = split$counts$role, outcome = "1", n = split$counts$n_positive))
-  exploratory <- list(
+  training_views <- list(
     outcome = ggplot2::ggplot(distribution, ggplot2::aes(split, n, fill = outcome)) +
       ggplot2::geom_col(position = "dodge") +
       ggplot2::scale_fill_manual(values = c("0" = "#497DA1", "1" = "#B34656")) +
@@ -465,7 +460,7 @@ stormbreaker_clinical_example <- function(output_dir = NULL, figure_format = "pn
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
   )
   predictor_columns <- c("patient_id", features)
-  # Demonstration subset only. Explanation never uses assessment outcomes.
+  # Choose 16 assessment rows using their IDs and predictor columns.
   query <- utils::head(split$assessment[predictor_columns], 16L)
   shap <- model_shap(finished$fit, query, "patient_id",
     background_data = split$development$data[predictor_columns],
@@ -473,7 +468,7 @@ stormbreaker_clinical_example <- function(output_dir = NULL, figure_format = "pn
   finished$explanation <- shap
   finished$plots$external <- NULL
   finished$plots$assessment <- views$plots
-  finished$plots$training_data <- exploratory
+  finished$plots$training_data <- training_views
   finished$plots$explanation <- list(importance = plot_shap_imp(shap),
     beeswarm = plot_shap(shap, feature_values = query, id_col = "patient_id"),
     waterfall = plot_shap_one(shap),
@@ -520,7 +515,7 @@ route <- bi_pipeline(c("Lasso", "RF", "GBM"))
     invisible(as.list(environment(), all.names = FALSE))
   },
   "doctor-select" = function() {
-# A predeclared Lasso-selection + Logistic route; no automatic winner selection.
+# Fit the predeclared Lasso-selection + Logistic route.
 data <- bi_example(n = 100, seed = 42)
 genes <- c("gene_a", "gene_b", "gene_c")
 r <- bi_run(data, outcome = "outcome", id = "patient_id", predictors = genes,
@@ -613,8 +608,7 @@ survival_cv <- compare_cv(
 print(survival_cv)
 survival_cv$comparison
 
-# STORMBREAKER does not choose a winner. The study team supplies the final
-# specification; this synthetic example uses the predeclared all-feature Cox.
+# Fit the prespecified all-feature Cox route.
 survival_final_pipeline <- survival_pipelines[["all_features_cox"]]
 survival_fit <- fit_final(survival_task, survival_final_pipeline)
 
@@ -674,7 +668,7 @@ binary_cv <- compare_cv(
 print(binary_cv)
 binary_cv$comparison
 
-# Again, the package does not select from the comparison automatically.
+# Fit the prespecified all-feature Logistic route.
 binary_final_pipeline <- binary_pipelines[["logistic"]]
 binary_fit <- fit_final(binary_task, binary_final_pipeline)
 
@@ -749,7 +743,7 @@ multi_cohort_result$cohorts$Test$comparison
     invisible(as.list(environment(), all.names = FALSE))
   },
   "multiclass-classical" = function() {
-# Iris is a public demonstration dataset, not clinical validation evidence.
+ # Iris demonstrates the multiclass workflow.
 d <- datasets::iris
 d$id <- seq_len(nrow(d))
 task <- multi_task(d, "id", "Species", names(d)[1:4],
@@ -763,7 +757,7 @@ analysis$results$gaussian_naive_bayes$plots$class_statistics
 sb_predict_multiclass(analysis$results$qda$fit, d[1:3, ])
 comparison <- sb_compare_multiclass(task, methods, folds = 3)
 comparison$comparison
-# No automatic files, reports or confusion plots.
+# Inspect the comparison table in R.
     invisible(as.list(environment(), all.names = FALSE))
   },
   "multiclass-quickstart" = function() {
@@ -773,15 +767,14 @@ data$patient_id <- seq_len(nrow(data))
 genes <- names(data)[1:4]
 task <- multi_task(data, "patient_id", "Species", predictors = genes)
 
-# Independent full-data feature exploration, not held-out performance.
+ # Run each feature analysis on all supplied samples.
 analysis <- analyze_methods(task, c("Boruta", "varSelRF", "VSURF", "ABESS"))
 analysis$status
 selected_genes(analysis, "Boruta")
 selected_genes(analysis, "ABESS")
 analysis$results$abess$plots$support_criterion
 
-# Each learner receives the original candidate features inside its training fold.
-# Do not substitute genes selected on the full data above.
+# Compare learners using the original candidate features in each training fold.
 comparison <- sb_compare_multiclass(task,
   c("svm_radial", "ranger", "xgboost", "lightgbm", "catboost"), folds = 3)
 comparison$comparison
@@ -913,7 +906,7 @@ if (interactive()) print(figures$CV)
     invisible(as.list(environment(), all.names = FALSE))
   },
   "user-models" = function() {
-# User-controlled models and genes. These functions do not infer the endpoint.
+# Supply the endpoint, candidate genes and models explicitly.
 # Replace paths, endpoint columns and genes with YOUR predeclared study inputs.
 # Lines below are illustrative, not executed automatically by the package.
 # Read your own gene list: one exact predictor column name per line.
@@ -934,17 +927,17 @@ compared <- sb_compare_models(task,
   models = c("logistic", "ridge_logistic", "ranger_binary"),
   folds = 5L, seed = 2026L)
 
-# No model preference: use this INSTEAD to run the complete task-specific menu.
+# To compare the full task-specific menu, set models = NULL.
 # compared <- sb_compare_models(task, models = NULL, folds = 5L, seed = 2026L)
 
 compared$comparison
 compared$elapsed_seconds
-# Use new file paths for each run; do not replace past patient results.
+# Use a new output path for each run.
 # write.csv(compared$comparison, "D:/my_study/run_01/comparison.csv", row.names = FALSE)
 # saveRDS(compared, "D:/my_study/run_01/comparison.rds")
 
 # After development-only review, explicitly choose a compared specification.
-# selected <- "logistic"  # example, NOT an automatically selected winner
+# selected <- "logistic"  # explicitly chosen example route
 # final_fit <- fit_final(task, compared$model_pipelines[[selected]])
 # saveRDS(final_fit, "D:/my_study/run_01/model.rds")
 # Predict external predictors first, then supply outcomes for external evaluation;

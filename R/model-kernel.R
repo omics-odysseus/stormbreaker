@@ -290,7 +290,8 @@ sb_lssvm_diagnostic <- function(fit, type) {
     decision = as.numeric(scores[, 2L] - scores[, 1L]))
   structure(list(type = "svm_decision_distribution", table = tab, native_table = unname(scores),
     learner = fit$pipeline$learner, pipeline_id = fit$pipeline$id, sensitive_training_data = TRUE,
-    interpretation = "Original development class-score contrast (class 1 minus class 0); not held-out performance.\nZero is the class boundary. The package uses plogis(contrast), not a fitted calibration; scores are not probabilities.",
+    interpretation = paste("Native decision contrast for development samples (class 1 minus class 0).",
+      "Zero marks the class boundary. The package transforms the contrast with the fixed function plogis()."),
     source = "original saved LS-SVM kernel expansion; no fitting"), class = "stormbreaker_algorithm_diagnostic")
 }
 
@@ -437,7 +438,8 @@ sb_svm_diagnostics <- function(fit, type = "support_counts") {
       decision = orientation * as.numeric(raw))
     native <- unname(raw)
     sensitive <- TRUE
-    interpretation <- "Original development-sample decision scores, oriented toward class 1; not held-out performance.\nZero: native classification boundary, not necessarily calibrated probability 0.5. Scores are not probabilities."
+    interpretation <- paste("Native decision values for development samples, oriented toward class 1.",
+      "Zero marks the native class boundary. Predicted probabilities are a separate output.")
   }
   structure(list(type = paste0("svm_", type), table = tab, native_table = native,
     intercept = intercept, orientation = orientation, learner = id, pipeline_id = fit$pipeline$id,

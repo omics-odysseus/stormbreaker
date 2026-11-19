@@ -46,9 +46,9 @@ sb_analyze_multiclass_lpc <- function(task, spec) {
     feature_result = "selection", selection_rule = spec$selection_rule,
     features = tab, class_features = NULL, evidence = tab, parameters = params,
     fit = fit, diagnostics = list(selection_scores = tab), plots = list(selection_scores = plot),
-    notes = list(interpretation = paste("Full-input exploratory feature screening.",
-      "Native threshold search is row-based, not patient-group-isolated.",
-      "LPC scores do not give patient risk probabilities.")),
+    notes = list(interpretation = paste("Feature screening using all supplied samples.",
+      "The native threshold search operates on individual rows.",
+      "LPC values rank features.")),
     plot_status = data.frame(view = "selection_scores", status = "available", reason = ""))
 }
 

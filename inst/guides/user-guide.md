@@ -56,7 +56,7 @@ For a supplied local source archive, use
 version and R requirements. After updating a loaded package, restart R and
 check `packageVersion("stormbreaker")` and `find.package("stormbreaker")`.
 Use `lib = your_project_library` for an isolated installation.
-`sb_start()` opens local, copyable workflow examples; it does not run them.
+Use `sb_start()` to open and copy local workflow examples.
 
 ### Input format
 
@@ -68,7 +68,7 @@ Keep distinct endpoints, such as overall and disease-free survival, separate.
 Use **months** consistently in these examples. Convert days with
 `time / 30.4375` for average months, or years with `time * 12`. If a study uses
 another conversion convention, apply it consistently to all cohorts and
-prediction horizons. `time_unit` labels values; it does not convert them.
+prediction horizons. Convert the values before setting `time_unit`.
 
 Transpose a gene-by-sample expression matrix before constructing a task.
 Align expression and clinical data by identifier. `sb_read_cohort()` preserves
@@ -81,9 +81,9 @@ task <- bi_task(cohort, "patient_id", "outcome", predictors = genes)
 ```
 
 The CSV example requires your own files. Prepare missing values, feature
-mapping and expression scales for the study; data-dependent preprocessing
-belongs within the relevant analysis folds. External predictors must use the
-same definitions and scale. Missing genes are not replaced with zeros.
+mapping and expression scales for the study; apply data-dependent preprocessing
+within the relevant analysis folds. Supply every required external feature on
+the same scale and with the same definition used in development.
 For repeated observations, use unique row IDs and declare the patient/group
 column through the task's `group_col` argument.
 
@@ -101,7 +101,8 @@ thresholds, horizons and the model-selection rule before examining test outcomes
 
 ## Model comparison
 
-For a first run, use the two-model quick start in the repository README. The
+For a first run, use the [two-route workflow](#runnable-examples) below. It
+compares direct Logistic with Lasso followed by Logistic on the same folds. The
 examples below without an explicit model list compare the full menu.
 
 ### Binary classification
@@ -190,7 +191,7 @@ rule. Use its exact name from `names(binary$pipelines)`:
 ```r
 finished <- finish_run(
   binary, "Lasso + Logistic",
-  external = list(Validation = validation), reverse = FALSE
+  external = list(Validation = validation)
 )
 result_table(finished$evaluations$Validation, metric = "roc_auc")
 head(finished$predictions$Validation)
@@ -199,8 +200,7 @@ head(finished$predictions$Validation)
 `finish_run()` retains the comparison and reuses an existing final fit or fits
 the chosen pipeline on all development data. `$fit` is the saved model,
 `$genes` contains stage-wise features, and `$predictions` and `$evaluations`
-contain cohort-specific results. Binary direction is preserved by default;
-the optional outcome-dependent correction is described in the parameter table.
+contain results by cohort.
 
 ```r
 views <- clinical_plots(
@@ -216,9 +216,9 @@ views$plots[["Threshold performance"]]
 views$plots[["Confusion matrix"]]
 ```
 
-The decision curve uses thresholds declared during modeling. The confusion
-matrix here uses 0.5; this is an example threshold, not a clinical recommendation.
-`views$status` reports unavailable figures and their reasons.
+Declare thresholds during modeling for decision curves. For the confusion
+matrix, use a threshold chosen in advance; the example uses 0.5. Check
+`views$status` for figure availability and reasons.
 
 ```r
 survival_validation <- surv_example(n = 100, seed = 2)
@@ -242,9 +242,9 @@ endpoint <- bi_endpoint(new_outcomes, "patient_id", "outcome")
 evaluation <- eval_external(prediction, endpoint)
 ```
 
-Here `task`, `new_samples` and `new_outcomes` are study inputs prepared as above.
-Prediction requires IDs and model features, not outcomes. Evaluation matches
-prediction and endpoint IDs. `fit$required_features` lists required columns.
+Prepare `task`, `new_samples` and `new_outcomes` as above. Predict using IDs
+and the columns in `fit$required_features`, then supply outcomes separately.
+Use matching IDs for predictions and endpoints.
 
 The corresponding task-based survival workflow declares the same time unit
 and horizon during development and evaluation:
@@ -263,7 +263,6 @@ survival_evaluation <- eval_external(survival_prediction, survival_endpoint)
 
 To compare several locked models on **one** cohort, pass their prediction
 objects and its endpoint to `compare_external(predictions, endpoint)`.
-Do not combine unrelated cohorts into that single-cohort comparison.
 
 ### Reading metrics
 
@@ -274,23 +273,19 @@ repetitions, pipeline identities, horizons and units remain separate.
 `sb_export_failures(x, "new-failures.csv")` writes their saved cohort, pipeline,
 stage, fold, metric and reason fields. Review error text before sharing it.
 
-The metric table distinguishes `estimate`, metric `status`, overall
-`run_status`, `scope` and `aggregation`. Patient IDs can recur across models;
-use pipeline and patient columns together. External prediction tables contain
-scored observations, including outcomes, rather than outcome-blind inputs.
-Default performance plots omit unavailable entries; `show_unavailable = TRUE`
-restores their labels. Missing or nonfinite estimates are never replaced by zero.
+Read `estimate` alongside `status`, `run_status`, `scope` and `aggregation`.
+Use pipeline and patient columns together to identify rows across models.
+External evaluation tables include outcomes. Set `show_unavailable = TRUE` to
+show unavailable labels; missing and nonfinite estimates remain unavailable.
 
-Binary CV ROC AUC retains within-assessment-fold comparisons and saved pair-based
-aggregation. Average precision retains its fold-aware definition. Harrell C
-uses within-fold comparable pairs. These summaries are not pooled apparent
-training estimates; fold variation is not a confidence interval.
+Compare routes using the saved assessment-fold summaries. Binary ROC AUC and
+Harrell C aggregate within-fold pairs, and average precision uses its fold-aware
+definition. Treat variation across folds as descriptive.
 
-Fixed-horizon `time_auc`, `uno_c` and `ipcw_brier` keep the saved target and unit.
-The weighted IPCW Brier estimate can exceed one and is not clipped. Missing
-horizon metrics are `not_requested` for successful horizon-free results, or
-`not_saved` where appropriate. Plotting reads the saved estimates rather than
-calculating missing metrics.
+Match the saved target and unit when comparing `time_auc`, `uno_c` and
+`ipcw_brier`. The weighted IPCW Brier estimate can exceed one. Check
+`not_requested` for successful horizon-free results and `not_saved` for metrics
+absent from the stored results. Plots read the saved estimates.
 
 ## Diagnostics and explanations
 
@@ -305,16 +300,13 @@ diagnostics$plots$selector_1_cv
 diagnostics$plots$selector_1_coefficient_path
 ```
 
-These last two views apply to the Lasso-selection example. Other methods expose
-their supported diagnostics through the same `plots()` call. Detailed evidence
-must have been captured during fitting; a reused compact model cannot recover a
-missing path by plotting. Query-dependent diagnostics can receive
-`plots(fit, new_data = query)`.
+Capture the native diagnostics you plan to inspect when fitting. Use
+`plots(fit)` to find the available diagnostics, including the first selector's
+CV and coefficient path in the Lasso example. Supply query data for diagnostics
+that use it: `plots(fit, new_data = query)`.
 
-For a specific retained diagnostic, use `native_diag(fit, complete = TRUE)`,
+To inspect a specific stage or learner, use `native_diag(fit, complete = TRUE)`,
 `path_diag()`, `forest_diag()` or another supported extractor, then `plot_diag()`.
-A selector's evidence belongs to its stage: a Logistic predictor after Lasso
-selection is not itself a Lasso model.
 
 ### SHAP and coefficients
 
@@ -346,12 +338,9 @@ represent supported original linear models and their reference ranges.
 
 ### Survival curves
 
-`add_surv_curve(fit, original_development_task)` adds a supported complete
-baseline using the original development data and unchanged coefficients.
-The linear Cox fit must already retain a prediction horizon and a Breslow/Efron
-baseline point. It checks identifiers, time unit and that saved point. Use the
-horizon-aware task-based fit above, not the horizon-free risk-ranking fit.
-Do not supply external outcomes to reconstruct this baseline.
+Use the horizon-aware linear Cox fit above and the original development task.
+`add_surv_curve()` checks identifiers, time unit and the saved Breslow or Efron
+baseline point, then supplies the complete baseline using the same coefficients.
 
 ```r
 curve_fit <- add_surv_curve(survival_fit, survival_task)
@@ -359,9 +348,8 @@ curves <- surv_curves(curve_fit, survival_validation, "patient_id")
 plot_surv(curves, rows = 1)
 ```
 
-The baseline corresponds to a linear predictor of zero, not an average patient.
-Curves are model predictions, not Kaplan-Meier estimates; the display stays
-within observed training follow-up.
+The baseline corresponds to a linear predictor of zero. The plotted curves
+are model predictions within observed development follow-up.
 
 ### Other saved-result views
 
@@ -432,11 +420,9 @@ writes an offline gallery of supplied plots. Report paths must be new.
 
 `sb_view_results()` opens a model-by-cohort page with metric selection, search,
 cohort visibility and CSV/SVG export. Use `open = FALSE` and a new `path` for
-noninteractive output. It displays saved summaries rather than patient records.
-Sorting and browser imports do not select or refit a model. Validation averages
-use compatible displayed validation cohorts, excluding development and test
-cohorts; missing targets remain unavailable. CSV retains filtered routes, while
-SVG and printing follow the displayed page.
+noninteractive output. Sort or import saved summaries to browse results.
+Validation averages use compatible displayed validation cohorts only. CSV
+retains filtered routes; SVG and printing follow the displayed page.
 
 ## Advanced workflows
 
@@ -462,40 +448,35 @@ example$metrics
 ```
 
 Use `sb_split_binary(task, train_prop = .7, seed = 82L)` with your own
-`bi_task()`. Declare unique observation IDs and the `group_col` when a patient
-has repeated observations. The split keeps each group together and preserves
-both outcomes on both sides. Observed proportions can differ from 70:30 when
-groups vary in size or strata are small. It is an **internal holdout**, not
-external validation or a class-balancing method. Fit and select using only
-`split$development`, and pass the unchanged `split$assessment` to
-`finish_run(..., external = list(Holdout = split$assessment), reverse = FALSE)`
-only after choosing the route. The assessment plots then carry the holdout label.
+`bi_task()`. Use unique observation IDs and set `group_col` for patients with
+repeated observations. The split keeps each group together and both outcomes
+represented; the realized proportions can differ from 70:30 for groups of
+different sizes or small strata. Fit and select on `split$development`, then
+pass the unchanged internal holdout to
+`finish_run(..., external = list(Holdout = split$assessment))`. The assessment
+plots use the holdout label.
 
 Specify `selector = "rf_binary_importance"` and
 `selector_options = list(top_n = 5L, spearman_cutoff = .70)` for optional RF
 ranking and redundancy pruning inside each training fold and on final
-development data. The cutoff is a user choice, not a clinical standard.
-Pruning can retain fewer than five predictors. Use a probability threshold
-declared before looking at holdout outcomes; the example's 0.5 is illustrative.
-The ROC interval is a patient bootstrap interval for AUC, not a confidence
-band for the curve. The example has one row per patient; for repeated
-observations, define the evaluation unit and use group-aware intervals.
+development data. Set the pruning cutoff and probability threshold from your
+analysis plan; the example uses 0.70 and 0.5, respectively. Pruning can retain
+fewer than five predictors. Report the patient-bootstrap AUC interval with the
+ROC curve. For repeated observations, define the evaluation unit and use
+group-aware intervals.
 
 The example exports an outcome bar chart, RF importance, a training
 correlation heatmap, the existing clinical curves and confusion matrix, and
 five SHAP views. Its SHAP reference comes from development predictors;
-the heatmap shows signed saved contributions, not causal effects.
-Calibration is reported with curves, Brier score and calibration summaries,
-not a pass/fail Hosmer–Lemeshow P-value.
+the heatmap shows signed contributions to the fitted predictions. Review
+calibration with its curves, Brier score and calibration summaries.
 
 #### Compare more binary methods
 
 Inspect every binary menu entry and build one configuration per compatible
-predictor under the same upstream selector. This is separate from the six-family
-tuning example. Existing learners use their registered settings; this does not
-run a new hyperparameter grid for every model. Start with a small named subset if
-runtime is a concern. Change `selector` to compare a different upstream method
-in a separate planned run; selector-only methods are not predictors.
+predictor under the same upstream selector, using the registered learner
+settings. Start with a small named subset to limit runtime. Change `selector`
+for a separate run with a different upstream method.
 
 ```r
 d <- bi_example(120L, seed = 42L)
@@ -527,14 +508,12 @@ In this package version, the binary menu contains 92 prediction configurations
 and 12 selector-only entries. RF is registered for 90 prediction configurations.
 Pre and Cancerclass are limited to routes without an upstream selector; inspect
 them with `selector = "none"` or explicitly include them as distinct routes using
-`include_unfiltered = TRUE`. Optional package locations and incompatible pairs
-are reported before running, and fit failures remain visible after running; no
-learner is silently swapped. The same folds are used across the batch, with
-screening recalculated on each training fold. Each candidate's out-of-fold
-predictions stay in the run. Only the chosen candidate is refitted for the
-holdout. Native diagnostics can be extracted from the saved fit when supported;
-SHAP is optional and should be requested for a selected model, not all candidates.
-Figures and tables are not written unless an export is requested.
+`include_unfiltered = TRUE`. Review optional package locations and incompatible
+pairs before fitting, then check the recorded fit failures. The batch uses shared
+folds, recalculates screening on each training fold and saves out-of-fold
+predictions for each candidate. Refit the chosen candidate for the holdout, then
+request supported diagnostics or SHAP for that fit. Use `export_run()` to write
+figures and tables.
 
 ### Task-based repeated validation
 
@@ -558,14 +537,13 @@ repeated$comparison
 ```
 
 Each seed defines one repetition; pipelines share splits within a repetition.
-Complete results and out-of-fold predictions are retained. Split variation is
-not a set of independent validation cohorts or a confidence interval.
+Use the saved results and out-of-fold predictions to assess variation across
+development splits.
 
 `workers = 1` is serial. `workers = 2` runs two repetitions in separate local
 processes and retains input order. Allow memory for two data copies and active
-fits. Built-in parallel execution keeps engines single-threaded; learners that
-depend on the caller's RNG stream may require serial execution. Tree counts
-and training iterations are model settings, not execution-speed switches.
+fits. Built-in parallel execution keeps engines single-threaded; use serial
+execution when the learner requires the caller's RNG stream.
 
 ### Multiple cohorts and explicit selection
 
@@ -587,17 +565,16 @@ cohort_result$cohorts$Validation_A$comparison
 cohort_result$cohorts$Validation_B$comparison
 ```
 
-Each route is fitted on development data and applied to each cohort; development
-results remain out-of-fold. In real data, patients and groups must be independent
-between cohorts. Renaming an overlapping patient does not make it independent.
-Survival endpoints must agree on time units and horizons.
+Supply cohorts with disjoint patients and groups. For survival, use matching
+time units and horizons. Fit routes on development data, retain its out-of-fold
+results, and apply each fitted route to the other cohorts.
 
-Roles are `"validation"`, `"test"` or `"external"`; omitted roles are external.
-If validation results inform selection, retain a separate independent test
-cohort. `sb_select_model(cohort_result)` applies the declared validation metric,
-equally weights eligible validation cohorts and resolves ties in declaration
-order. Test cohorts do not participate; validation outcomes are not added to
-the training fit. Review `$model_selection$ranking` on the returned model.
+Label each cohort `"validation"`, `"test"` or `"external"` (the default).
+Use `sb_select_model(cohort_result)` to select by the declared metric from the
+validation cohorts. It weights eligible cohorts equally and resolves ties in
+declaration order. Keep fitting confined to development data and reserve a
+separate test cohort for evaluation. Review `$model_selection$ranking` on the
+returned model.
 
 Alternatively choose a route explicitly. The successful `Direct` example is
 evaluated on a separately generated test cohort:
@@ -606,23 +583,23 @@ evaluated on a separately generated test cohort:
 test_data <- bi_example(n = 90, seed = 45)
 test_data$patient_id <- paste0("test_", test_data$patient_id)
 adv_finished <- finish_run(adv_run, "Direct",
-  external = list(Test = test_data), reverse = FALSE)
+  external = list(Test = test_data))
 result_table(adv_finished$evaluations$Test, metric = "roc_auc")
 ```
 
 Use the same export and reload steps as in [Saving and reporting](#saving-and-reporting).
-A failed selection route stays in the results; it is not repaired by adding an
-arbitrary gene or lowering its threshold.
+Review failed routes in the comparison results before choosing a route.
 
 ### Stacking and held-out cohorts
 
 Whole results from `sb_run_stack_cv()` and `sb_run_internal_external_cv()`
 use the same `result_table()`, plotting, report and failure-export interfaces.
-Stack views retain outer-CV member and stack roles, not inner training folds.
-Internal-external CV is method-development validation, not an independent final
-test. Context columns such as `repeat_id`, `heldout_cohort_id`, `model_role`,
-`validation_scheme` and `view_id` distinguish saved entries without pooling
-repetitions, cohorts or survival targets. A `view_id` is not a patient ID.
+Stack views identify the member and stack roles from outer CV.
+Use internal-external CV for method development and a separate final test set
+for independent evaluation. Context columns such as `repeat_id`,
+`heldout_cohort_id`, `model_role`, `validation_scheme` and `view_id` keep saved
+entries distinct by repetition, cohort and survival target. A `view_id`
+identifies a results view.
 
 ### Computation reuse
 
@@ -633,11 +610,11 @@ samples, outcomes, method settings, seeds and relevant RNG/diagnostic context.
 Outer analysis folds, inner analysis folds and final development data remain
 separate. Ordered chains can share identical prefixes; later stages still run.
 
-Failed or warning-producing fits are not successful cache entries. Pipeline
-identities, configured training budgets, predictions and diagnostics remain
-distinct. The in-memory context is released at scope exit; processes do not
-automatically share it. CV/final learner entries use a **256 MiB** retention
-budget with least-recently-used eviction, not a limit on total process memory.
+The cache retains successful fits without warnings. Pipeline identities,
+configured training budgets, predictions and diagnostics remain distinct.
+Each R process maintains its own in-memory context for the current scope.
+CV and final learner entries share a **256 MiB** cache budget with
+least-recently-used eviction.
 
 ```r
 unshared <- compare_cv(adv_task, adv_routes, folds = 5, reuse_selectors = FALSE)
@@ -682,9 +659,9 @@ Its 40 bootstrap draws are for a small synthetic demonstration. Interval plots
 read saved results. Bootstrap metric names are used exactly as stored, for
 example `ipcw_brier_score`, versus `ipcw_brier` in result views. Cohort intervals,
 pooled intervals and between-cohort prediction intervals have different meanings.
-Feature-selection frequencies and overlap describe saved resampling selections,
-not causal evidence. `source = "glmnet_active_set"` selects saved active-set
-records in supported selection-frequency views.
+Use feature-selection frequency and overlap to inspect saved resampling
+selections. Choose `source = "glmnet_active_set"` for saved active-set records
+in supported selection-frequency views.
 
 ## Multiclass and independent analysis
 
@@ -713,10 +690,11 @@ model assumptions still apply. Supported saved fits use
 
 ### Independent method analysis
 
-`analyze_methods()` fits each selected method to the same candidate features;
-it does not pass one method's selected genes to the next. This exploratory
-analysis is distinct from validation of a complete selection-and-prediction
-pipeline. Use binary, survival or multiclass task objects as appropriate.
+`analyze_methods()` fits each selected method independently to the same
+candidate features using all supplied samples. To assess a complete
+selection-and-prediction pipeline on held-out data, use route comparison
+and run selection inside each training fold. Use binary, survival or
+multiclass task objects as appropriate.
 
 ```r
 analysis <- analyze_methods(adv_task,
@@ -731,8 +709,8 @@ analysis$results$lasso$plots$cv_curve
 
 `selected_genes()` returns a defined selected set; `sb_method_features()` retains
 full feature evidence. For multiclass results, use `class = "setosa"` or another
-actual class to inspect class-specific coefficients. Forest importance provides
-rankings, not an automatically selected gene set.
+actual class to inspect class-specific coefficients. Use the forest
+importance table to inspect feature rankings.
 
 | Method | Retained evidence / selection rule |
 |---|---|
@@ -760,15 +738,22 @@ that fixed presence/absence rule.
 
 ## Runnable examples
 
-Run one of the six packaged scripts in a fresh R session:
+Start with the [complete route workflow](../examples/scenarios/07-route-workflow.R)
+used in the repository README. It builds two routes, compares them on shared
+development folds, refits the selected route, then saves and reloads it for
+prediction without outcome columns. It uses `glmnet` and `ggplot2`.
 
 ```r
 library(stormbreaker)
-source(system.file("examples", "scenarios", "01-binary.R",
+source(system.file("examples", "scenarios", "07-route-workflow.R",
   package = "stormbreaker", mustWork = TRUE))
-metrics
-figures$ROC
+example_result$cv_auc[c("route", "estimate")]
+example_result$selected
+example_result$figures$ROC
 ```
+
+For the three applications in the manuscript, see the
+[study examples](paper-cases.md). Use the scripts below for individual tasks.
 
 | Script | Workflow | Main outputs |
 |---|---|---|
@@ -778,17 +763,16 @@ figures$ROC
 | `04-survival.R` | Development and validation, with month units | Risk, horizon probabilities, concordance, timed AUC, Brier, calibration and DCA |
 | `05-diagnostics.R` | Lasso followed by Logistic | Selected genes, native diagnostics and coefficients |
 | `06-shap.R` | Saved model and eight query samples | SHAP values, importance, beeswarm, dependence and waterfall |
+| `07-route-workflow.R` | Direct Logistic versus Lasso followed by Logistic; shared comparison, final fitting and reuse | Route AUCs, chosen route, test ROC and predictions after reloading |
 
 Each script returns `example_result` and `figures`. Replace the filename to run
-another workflow. Scripts use the packaged synthetic CSVs and do not install
-engines or export files automatically.
+another workflow with the packaged synthetic CSVs. Install the required engines
+before running a script; export the returned figures separately as needed.
 
-The installed `examples/advanced-examples.R` collects the additional examples.
-Sourcing it defines functions without training any models. Use
-`advanced_examples()` to list the named demonstrations, then
-`run_advanced_example("multiclass")` or another listed name to run one and
-receive its result objects. Multi-cohort, custom-model and paper-figure examples
-use the same entry point.
+Source the installed `examples/advanced-examples.R`, list the demonstrations
+with `advanced_examples()`, and run one with
+`run_advanced_example("multiclass")` or another listed name. Multi-cohort,
+custom-model and paper-figure examples use the same entry point.
 The `user-models` entry is a file-based template: replace its two input paths
 with your own gene list and development CSV before running it.
 
@@ -798,10 +782,10 @@ and `workflow_finalize()`. The latter requires an explicit selected candidate
 and selection reason, with external predictor and outcome files supplied
 separately. The corresponding `development.rds` and final model can be reopened
 for later prediction. `stormbreaker_visualization_example()` runs the gallery
-above. `regenerate_demo_data(directory)` explicitly creates synthetic CSVs in a
-new directory; neither helper runs when the script is sourced.
+above. Call `regenerate_demo_data(directory)` to create synthetic CSVs in a
+new directory.
 
-Short names are aliases of existing public functions, not additional algorithms.
+Short names call the corresponding public functions.
 Use `stormbreaker::fit_final()` when another package has an overlapping name.
 The [workflow name map](../guides/preferred-name-map.csv) and
 [diagnostic name map](../guides/specialty-name-map.csv) list all aliases.
@@ -872,7 +856,7 @@ See [Multiclass and independent analysis](#multiclass-and-independent-analysis) 
 | `folds` | Integer | `5` | Outer cross-validation folds |
 | `seed` | Positive integer | `1` | Outer resampling seed |
 | `plots` | `NULL`, `TRUE` or `FALSE` | `NULL` | Controls overview figures and additional final fits, below |
-| `pipelines` | Uniquely named list or `NULL` | `NULL` | Custom complete pipelines; do not combine with `models` or `selector`; `stages` is ignored |
+| `pipelines` | Uniquely named list or `NULL` | `NULL` | Supply complete routes here instead of `models` and `selector`. Use `stages` for menu-generated routes. |
 | `decision_thresholds` | Numeric probability vector or `NULL` | `NULL` | Declared thresholds for saved decision curves; none are requested by default |
 
 `stages` defaults to `c(1, 2)` for full binary runs and `c(1, 2, 3)` for full
@@ -894,9 +878,8 @@ plots add runtime, memory and output size.
 | `surv_run()` | `time_unit` | String; `"month"` | Unit of the supplied follow-up times and prediction horizon |
 | `surv_run()` | `prediction_horizon` | Positive number or `NULL`; `NULL` | Risk ranking by default; `6` requests a six-month probability target |
 
-`time_unit` labels the supplied values; it does not convert them. Fixed-horizon
-evaluation requires model probabilities and cohort follow-up supporting that
-horizon.
+Set `time_unit` to the unit of the supplied values. For fixed-horizon evaluation,
+supply model probabilities and cohort follow-up for that horizon.
 
 #### Returned fields
 
@@ -928,20 +911,15 @@ pass it as `pipelines` to the appropriate run function for fitting.
 | `external` | Uniquely named list of data frames | `list()` | Cohorts with consistent ID, predictor and endpoint columns |
 | `plots` | Logical | `TRUE` | Algorithm and external figures; captures diagnostic materials when a new fit is required |
 | `explain` | External cohort name or `NULL` | `NULL` | Optional cohort to explain using development background data |
-| `reverse` | Logical | `FALSE` | Keeps the development direction by default. For binary outcomes, explicit `TRUE` uses external outcomes to assess AUC and flips probabilities below 0.5. Survival requires `FALSE` |
 
-An existing final model is reused; otherwise the selected pipeline is fitted on
-all development data. The original comparison is retained. Diagnostics for a
-reused compact model depend on the materials saved during its original fit.
-
-Independent external evaluation uses `reverse = FALSE` by default. Explicit
-`TRUE` enables outcome-dependent direction correction for binary outcomes;
-original predictions and correction records are retained separately.
+`finish_run()` keeps the original comparison and reuses an available final fit.
+Otherwise it fits the selected pipeline on all development data. Capture the
+diagnostic materials you plan to use when fitting the model.
 
 Returns `$fit`, `$genes`, `$predictions`, `$evaluations`, `$metrics`, `$plots`,
-`$explanation` and `$issues`. `$evaluated_predictions` and `$direction_correction`
-retain any evaluation-time processing separately from original predictions.
-Survival `$risk_groups` retains the development cutoff, group counts and
+`$explanation` and `$issues`. Use `$evaluated_predictions` for the predictions
+used in evaluation and `$predictions` for the original model predictions.
+Survival `$risk_groups` includes the development cutoff, group counts and
 available log-rank results.
 
 ### `result_table()`
@@ -1050,7 +1028,7 @@ models and figures to new directories:
 ```r
 chosen <- c("Logistic", "RF", "SVM")
 for (i in seq_along(chosen)) {
-  item <- finish_run(binary, chosen[i], reverse = FALSE)
+  item <- finish_run(binary, chosen[i])
   destination <- file.path("algorithm-results", sprintf("model-%03d", i))
   export_run(item, destination)
   saveRDS(item$fit, file.path(destination, "model.rds"))

@@ -299,10 +299,9 @@ rows are included. Optional ggplot2 is required.
 \strong{Details:} Rows retain model input order. Columns retain cohort/context input
 order, including repetition and stacking role. Different tasks, horizons,
 time units, metric scopes or aggregations are separated into panels.
-Cohort names do not prove independent validation. No automatic winner or
-clustered ordering is inferred. A cell needs successful metric and run
-status and a finite estimate to be coloured. Unavailable cells are grey,
-never zero; original values remain in the data. Colour scales use the
+The supplied results determine the evaluation scope. Colours represent
+finite estimates from successful runs and metrics. Unavailable cells
+appear grey, and all original values remain in the data. Colour scales use the
 observed successful estimates and retain their numerical values; lighter
 colours indicate preferable performance. No confidence interval is
 inferred. Large grids require a suitably sized output image.

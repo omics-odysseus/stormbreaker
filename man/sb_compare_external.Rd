@@ -68,11 +68,11 @@ still contribute target metadata when its locked horizon and time unit are
 recoverable. Otherwise the target is marked \code{partial} or \code{unknown} rather
 than being mislabeled as risk-only.
 
-This is a descriptive comparison of predictions that must have been locked
-before consulting the external outcomes. It does not rank pipelines, select
-a winner or threshold, estimate paired uncertainty, or prove
-transportability. In particular, the external endpoint must not be used to
-choose which fitted pipeline becomes the final model.
+Pass predictions fixed before inspecting the external outcomes. The result
+compares those predictions on the supplied cohort. Use development data to
+choose a pipeline and threshold; reserve final-test outcomes for evaluation.
+For paired intervals, pass the result to
+\code{\link[=sb_bootstrap_external_comparison]{sb_bootstrap_external_comparison()}}.
 }
 
 \subsection{\code{sb_collect_external_comparisons()}}{
@@ -84,7 +84,7 @@ pipeline order to the first cohort.
 
 \strong{Returns:} A \code{stormbreaker_external_collection} containing overall \code{status},
 common \code{task_type}, ordered \code{pipeline_ids}, a one-row-per-cohort \code{cohorts}
-table, a cohort-specific long \code{results} table, and the unchanged named
+table, a long \code{results} table by cohort, and the unchanged named
 source \code{comparisons}.
 
 \strong{Details:} Cohorts must contain the same task, pipeline IDs, and learner labels. For a
@@ -93,18 +93,14 @@ effective prediction horizon or no horizon in every cohort. The effective
 target is the endpoint-declared horizon, or the common locked prediction
 horizon when the endpoint omitted it. These checks prevent unlike evaluation
 targets from being placed in one table. A comparison whose target remained
-unknown or only partially recoverable cannot be collected. These checks
-compare only the labels stored in the supplied objects: they cannot prove
-cohort
-independence, common eligibility or outcome definitions, common upstream
-preprocessing, or that the same pipeline ID represents the same locked
-fitted state or published formula. Those study-design conditions remain the
-caller's responsibility.
+unknown or only partially recoverable cannot be collected. The checks use
+stored metadata. Interpret the results using the study's cohort roles and
+independence, eligibility, outcome definitions, preprocessing and fitted
+models or published formulas.
 
-This function does not pool or average metrics, perform association or
-performance meta-analysis, impute a missing pipeline, rank models, select a
-winner, or use one cohort to change another cohort's predictions. Cohort-
-specific uncertainty also remains in the original comparison objects.
+The collection presents observed metrics by cohort in the supplied pipeline
+order. The original comparison objects retain predictions and uncertainty
+estimates for each cohort.
 }
 }
 \examples{

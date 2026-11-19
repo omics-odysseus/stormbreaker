@@ -935,7 +935,7 @@ sb_plot_algorithm_diagnostic <- function(x) {
       ggplot2::labs(title = "ABESS support-size selection",
         subtitle = paste("Original selected support size:", x$selected_support_size),
         x = "Number of selected predictors", y = "GIC (lower is better)",
-        caption = "Original development-fit criterion, not held-out performance. No refitting.") +
+        caption = "Selection criterion from the original fit on the development data.") +
       sb_viz_theme())
   }
   ggplot2::ggplot(x$table, ggplot2::aes(lambda, coefficient, colour = feature)) +

@@ -93,15 +93,15 @@
 #' \strong{Returns:} A \code{stormbreaker_method_analysis} with named results, a method status
 #' table and candidate features. Each successful result retains its fit,
 #' feature table, native evidence, parameters, diagnostics, ggplots and separate
-#' explanatory notes. Plot failures do not discard a successful fit. Method
-#' failures do not stop other methods. No files are written automatically.
+#' explanatory notes. Fit and plot statuses are reported separately. The
+#' method status table records failures while the other methods run. Results
+#' are returned in memory.
 #' 
-#' This is full-input exploratory analysis, not held-out validation. CV curves
-#' describe tuning; OOB curves describe the native forest. Never select genes
-#' on the full cohort before cross-validation intended to evaluate selection.
-#' Use the pipeline comparison workflow for that purpose. Saved fits can
-#' contain patient-derived data. Survival random forest uses ranger impurity
-#' ranking; its current adapter does not compute OOB curves.
+#' Each method uses all supplied samples. CV curves describe tuning and OOB
+#' curves describe the fitted forest. To evaluate feature selection on
+#' held-out data, use pipeline comparison so selection runs inside each
+#' training fold. Saved fits can contain patient-derived data. The survival
+#' random forest adapter reports ranger impurity rankings rather than OOB curves.
 #' }
 #' 
 #' \subsection{\code{sb_method_catalog()}}{
@@ -386,7 +386,7 @@ sb_analyze_methods <- function(task, methods, inner_folds = 5L,
   rownames(status) <- NULL
   structure(list(results = results, status = status,
     candidate_features = task$predictors, task_type = task_type,
-    interpretation = "Full-input exploratory method analysis; not held-out validation"),
+    interpretation = "Independent method analysis using all supplied samples."),
     class = "stormbreaker_method_analysis")
 }
 

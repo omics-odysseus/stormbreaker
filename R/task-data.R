@@ -120,11 +120,10 @@
 #' @rawRd \value{See the individual entries in Function reference.}
 #' @rawRd \section{Function reference}{
 #' \subsection{\code{sb_binary_task()}}{
-#' \code{sb_binary_task()} records an explicit patient-level \code{0/1} outcome. Class
-#' \code{1} is the positive class. The function never drops patients, imputes
-#' values, converts labels, or guesses the positive class. Optional decision
-#' thresholds are supplied by the researcher; the package does not derive or
-#' optimize them from outcomes or model performance.
+#' Supply prepared rows with unique observation IDs, numeric predictors and
+#' \code{0/1} outcomes, with \code{1} as the positive class. The task uses the rows
+#' and values as supplied. Provide decision thresholds explicitly when the
+#' evaluation calls for them.
 #' 
 #' \strong{Returns:} A \code{stormbreaker_binary_task} object preserving the input rows and
 #' recording outcome and predictor roles.

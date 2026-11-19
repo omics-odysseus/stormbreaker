@@ -205,15 +205,12 @@
 #' state that no usable results are available. The CSV is header-only when
 #' there are no issues. See \code{\link[=sb_failure_table]{sb_failure_table()}} for its record definitions.
 #' 
-#' Patient-level rows, raw result objects and free-text error messages are
-#' never embedded. Caller-supplied titles, cohort labels and pipeline labels
-#' remain visible and must be reviewed before sharing. This is not a guarantee
-#' of anonymization: plotted calibration curves describe the supplied cohort.
-#' Saved numeric summaries are formatted to eight significant digits.
-#' The companion CSV includes saved error text, which may be sensitive;
-#' review it separately before sharing. Patient-level rows are not exported.
-#' If an I/O error interrupts the two-file write, a completed CSV may remain;
-#' it is not deleted or overwritten automatically. Inspect the reported paths.
+#' The HTML shows saved summaries, plots and caller-supplied titles and labels.
+#' It omits patient rows, raw result objects and error text. Numeric summaries
+#' use eight significant digits. Review the titles, labels and calibration
+#' curves before sharing. Review the companion CSV separately: it contains
+#' saved error text but omits patient rows. If export stops partway through,
+#' inspect the reported paths for an already completed CSV.
 #' }
 #' 
 #' \subsection{\code{sb_render_clinician_report()}}{

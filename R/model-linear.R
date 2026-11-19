@@ -2904,8 +2904,9 @@ sb_linear_margin_diagnostic <- function(fit, type) {
     tab <- data.frame(observation = seq_along(decision), class = as.character(a$endpoint$outcome), decision = decision)
     native <- NULL
     mapping <- if (id == "dwd_binary") "plogis(2 * score)" else "plogis(score)"
-    interpretation <- paste0("Original development-sample decision scores toward class 1; not held-out performance.\n",
-      "Zero is the class boundary. The package maps these scores with ", mapping, "; this is not calibration.")
+    interpretation <- paste0("Native decision values for development samples, oriented toward class 1.\n",
+      "Zero marks the class boundary. The package transforms the decision values with the fixed function ",
+      mapping, ".")
   }
   structure(list(type = paste0("svm_", type), table = tab, native_table = native,
     intercept = unname(intercept), orientation = orientation, learner = id, pipeline_id = fit$pipeline$id,

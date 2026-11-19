@@ -163,8 +163,8 @@ sb_analyze_multiclass_information <- function(task, spec) {
     feature_result = "selection", selection_rule = spec$selection_rule,
     features = tab, class_features = NULL, evidence = tab, parameters = params,
     fit = fit, diagnostics = list(selection_scores = tab), plots = list(selection_scores = plot),
-    notes = list(interpretation = paste("Full-input feature selection, not held-out evaluation.",
-      "Scores are native sequential selection criteria, not patient risks or marginal gene effects.")),
+    notes = list(interpretation = paste("Feature selection using all supplied samples.",
+      "Values describe the native sequential criteria used to select features.")),
     plot_status = data.frame(view = "selection_scores", status = "available", reason = ""))
 }
 
@@ -364,22 +364,21 @@ sb_analyze_multiclass_method <- function(task, spec, inner_folds, inner_seed,
     plots = if (failed) list() else drawn$plots,
     diagnostics = if (failed) list() else drawn$tables,
     notes = c(figure_notes, list(interpretation = if (fit$method %in% sb_multiclass_native_catalog()$method ||
-        fit$method == "ridge") paste("Full-input exploratory fit, not held-out evaluation.",
-      "No gene-selection rule is defined. SVM uses native one-versus-one probability coupling.",
-      "Support-vector counts are model structure, not accuracy or gene importance.",
-      "Only diagnostics implemented for this engine are returned; no surrogate model is fitted.") else
+        fit$method == "ridge") paste("Model fitted using all supplied samples.",
+      "These methods fit predictors directly. SVM uses native one-versus-one probability coupling.",
+      "Support-vector counts describe the fitted model's structure.",
+      "Available diagnostics come from the fitted engine.") else
       if (fit$method %in% sb_multiclass_classical_catalog()$method) paste(
-      "Full-input exploration, not held-out evaluation. Class means and SD",
-      "are feature distributions, not importance, confidence intervals or selected genes.",
-      "Tree importance is native split importance; used_for_split separately",
-      "identifies actual primary split variables. No fallback model is fitted.") else paste(
-      "Full-input exploration, not held-out evaluation. Class coefficients are",
-      "the native multinomial parameterization, not binary odds ratios.",
+      "Model fitted using all supplied samples.",
+      "Class means and standard deviations describe feature distributions.",
+      "Tree importance comes from native split statistics; used_for_split",
+      "identifies primary split variables.") else paste(
+      "Model fitted using all supplied samples.",
+      "Class coefficients use the native multinomial parameterization.",
       "Overall selection is the union of nonzero coefficients across classes.",
-      "Forest importance is ranking only; OOB class importance is unscaled",
-      "permutation accuracy decrease, not Gini importance. Native OOB sampling",
-      "is row-based, not patient-group-isolated; use grouped outer evaluation",
-      "for repeated patients."))),
+      "Forest importance ranks features. OOB class importance is the unscaled",
+      "decrease in class accuracy under permutation. Native OOB sampling operates",
+      "on individual rows; use grouped outer evaluation for repeated patients."))),
     plot_status = data.frame(view = if (failed) "multiclass_plots" else names(drawn$plots),
       status = if (failed) "error" else rep("available", length(drawn$plots)),
       reason = if (failed) conditionMessage(drawn) else rep("", length(drawn$plots))))
@@ -573,9 +572,9 @@ sb_analyze_multiclass_selector <- function(task, spec) {
     data.frame(view = type, status = if (is.null(error)) "available" else "error",
       reason = if (is.null(error)) "" else conditionMessage(error))
   })
-  notes$interpretation <- paste("Full-input multiclass feature selection, not held-out evaluation.",
-    "These are selectors, not probability-producing classifiers.",
-    "Native forest OOB resampling is row-based, not patient-group-isolated.")
+  notes$interpretation <- paste("Multiclass feature selection using all supplied samples.",
+    "The methods return selected features.",
+    "Native forest OOB resampling operates on individual rows.")
   list(status = "success", method = method, label = spec$label,
     feature_result = "selection", selection_rule = spec$selection_rule,
     features = fit$scores, class_features = NULL, evidence = fit$scores,

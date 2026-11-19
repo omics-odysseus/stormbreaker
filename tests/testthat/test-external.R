@@ -3484,7 +3484,7 @@ test_that("survival collections retain the common evaluation target", {
   )
 })
 
-test_that("external comparisons remain cohort-specific and ordered", {
+test_that("external comparisons retain results in cohort order", {
   cohort_a <- make_sb_binary_external_comparison("a")
   cohort_b <- make_sb_binary_external_comparison("b", reverse = TRUE)
 

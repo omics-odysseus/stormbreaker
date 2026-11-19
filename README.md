@@ -1,9 +1,11 @@
 # STORMBREAKER
 
-STORMBREAKER is an R package for transcriptomic prediction. It connects feature
-selection, shared-fold model comparison, final fitting, external evaluation and
-interpretation for binary classification and right-censored survival, with
-additional multiclass interfaces.
+STORMBREAKER is an R package for building and comparing modelling routes for
+transcriptomic prediction. A route pairs a compatible predictor with optional
+ordered feature-selection steps; it can also use a predefined gene set directly.
+Compare candidate routes on shared folds, choose a route, then refit and save it
+for use in new cohorts. The package supports binary classification and
+right-censored survival prediction, with additional multiclass interfaces.
 
 The prediction menus contain 92 binary and 88 survival configurations. Inspect
 available methods and engines with `models("binary")` or `models("survival")`.
@@ -23,60 +25,58 @@ for the methods you intend to use; the method menus report their status.
 
 ## Quick start
 
-Compare two models on the bundled synthetic development data, then evaluate the
-selected model on a separate test cohort. Each row is one sample: `patient_id`
-is the unique ID, `outcome` is 0/1 (1 is positive), and `gene_a`, `gene_b`
-and `gene_c` are numeric predictors. The ROC plot uses `ggplot2`
-(`install.packages("ggplot2")` if needed).
+Compare **two routes with the same Logistic predictor** using bundled synthetic
+data. One uses all candidate genes; the other selects genes with Lasso before
+fitting. This example uses `glmnet` and `ggplot2`; install them if needed. Each row
+is one sample with a unique `patient_id`, a 0/1 `outcome` (1 is positive) and
+numeric gene columns.
 
 ```r
 library(stormbreaker)
+source(system.file("examples", "scenarios", "07-route-workflow.R",
+  package = "stormbreaker", mustWork = TRUE))
 
-read_demo <- function(name) {
-  read.csv(system.file("extdata", name, package = "stormbreaker",
-    mustWork = TRUE), colClasses = c(patient_id = "character"))
-}
-development <- read_demo("demo-binary-development.csv")
-test <- read_demo("demo-binary-external-a.csv")
-genes <- c("gene_a", "gene_b", "gene_c")
-head(development[c("patient_id", "outcome", genes)], 3)
-
-run <- bi_run(development, outcome = "outcome", id = "patient_id",
-  predictors = genes, models = c("Logistic", "NaiveBayes"),
-  folds = 3, seed = 42, plots = FALSE)
-cv_auc <- result_table(run$comparison, metric = "roc_auc")
-route_ids <- vapply(run$pipelines, function(route) route$id, character(1))
-cv_auc$model <- names(route_ids)[match(cv_auc$pipeline_id, route_ids)]
-cv_auc[c("model", "estimate")]
-
-# Select using development-fold AUC only; the test cohort is not used here.
-selected <- cv_auc$model[which.max(cv_auc$estimate)]
-finished <- finish_run(run, selected, external = list(Test = test), plots = FALSE)
-test_eval <- finished$evaluations$Test
-result_table(test_eval, metric = "roc_auc")[c("metric", "estimate")]
-print(plot_roc(test_eval))
-
-model_file <- tempfile(fileext = ".rds")
-saveRDS(finished$fit, model_file)
-test_predictors <- test[c("patient_id", genes)]
-prediction <- predict_final(readRDS(model_file), test_predictors, "patient_id")
-head(prediction$predictions[c("patient_id", "probability")], 3)
+example_result$cv_auc[c("route", "estimate")]
+example_result$selected
+example_result$test_auc[c("metric", "estimate")]
+head(example_result$prediction$predictions[c("patient_id", "probability")], 3)
 ```
 
-You should see two development AUCs, one test AUC, a ROC curve, and a preview
-of the predictions. The reloaded model needs only IDs and predictor columns,
-not outcomes. To use your own data, replace the two CSVs and specify your
-predictor columns in `genes`. Keep the test data out of model selection.
+The [complete script](inst/examples/scenarios/07-route-workflow.R) follows
+one set of objects from comparison through reuse:
 
-The full menu and ordered feature-selection pipelines are covered in the
-[user guide](inst/guides/user-guide.md#selected-models-and-ordered-pipelines).
+1. **Build:** define the direct and Lasso routes. Set the Lasso selection
+   rule to `lambda.min` for this example.
+2. **Compare and choose:** fit both routes on the same three development
+   folds, including gene selection inside each training split. Choose by ROC
+   AUC, keeping the first listed route if the estimates tie.
+3. **Refit:** fit the chosen route to the development data. Use the separate
+   synthetic test cohort for evaluation.
+4. **Reuse:** save and reload the fit, then supply IDs and predictor columns
+   to predict. View the test ROC plot in
+   `example_result$figures$ROC`.
+
+For your own data, see the guide to
+[input format](inst/guides/user-guide.md#input-format) and
+[ordered pipelines](inst/guides/user-guide.md#selected-models-and-ordered-pipelines).
+
+## Study examples
+
+- [HNSC survival prediction](inst/guides/paper-cases.md#hnsc-survival-prediction)
+- [Tumour–normal tissue classification](inst/guides/paper-cases.md#tumour-normal-tissue-classification)
+- [Multicancer immunotherapy-response prediction](inst/guides/paper-cases.md#multicancer-immunotherapy-response-prediction)
+
+The cases explain the candidate sets, selection rules and final routes in the
+paper, with code to fit and apply those routes to prepared inputs.
 
 ## Documentation
 
 - [User guide](inst/guides/user-guide.md): complete workflows, advanced use,
   runnable examples and parameter reference.
+- [Parameter reference](inst/guides/user-guide.md#parameter-reference): arguments,
+  defaults and returned objects.
 - R help: `?bi_run`, `?surv_run`, `?finish_run` and `?multi_run`.
-- Installed guide (only when built with `build_vignettes = TRUE`):
+- Installed guide: build with `build_vignettes = TRUE` and open
   `vignette("stormbreaker-short-scenarios")`.
 - [Changelog](NEWS.md): current and historical changes.
 

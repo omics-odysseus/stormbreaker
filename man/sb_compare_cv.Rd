@@ -719,9 +719,9 @@ visible and do not trigger fallback; later predeclared pipelines and
 held-out-cohort cycles continue. Cohort, task, and strategy-contract
 errors are validated before this collection behavior applies.
 
-\strong{Details:} This function evaluates the supplied modeling strategy; it does not invent
-one. Development rows from the remaining cohorts are pooled without adding
-cohort-specific intercepts, strata, random effects, or batch correction.
+\strong{Details:} This function evaluates the supplied modeling strategy using
+pooled development rows from the remaining cohorts. Pooling adds no intercepts
+or strata by cohort, random effects, or batch correction.
 Cohorts must therefore declare the same numeric predictor-name set, time
 target, and decision thresholds. Predictor order is normalized to the first
 cohort, but feature intersection, measurement harmonization, eligibility,

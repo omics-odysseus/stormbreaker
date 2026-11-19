@@ -2246,7 +2246,7 @@ sb_classification_tree_diagnostics <- function(fit, type = "structure") {
   structure(list(type=if(type=="structure") "ctree_structure" else "classification_tree_leaf_probabilities",
     table=tab,native_frame=f,learner=s$learner,pipeline_id=fit$pipeline$id,
     source="Original tree frame, native split strings and class probabilities",
-    interpretation="Original training node counts and leaf probabilities; not held-out performance. No pruning or refitting."),
+    interpretation="Node counts and leaf probabilities from the original tree fitted to the training data."),
     class="stormbreaker_algorithm_diagnostic")
 }
 

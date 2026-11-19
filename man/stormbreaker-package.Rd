@@ -63,16 +63,11 @@ Supervised feature selection and tuning use each resampling analysis set.
 Declare patient groups for repeated observations; \code{\link[=sb_run_internal_external_cv]{sb_run_internal_external_cv()}}
 holds out complete cohorts. Choose the final pipeline using development results.
 
-\code{\link[=finish_run]{finish_run()}} and \code{\link[=sb_evaluate_external]{sb_evaluate_external()}} default to \code{reverse = FALSE},
-keeping the development-defined direction fixed. For binary outcomes,
-explicit \code{reverse = TRUE} uses external outcomes to flip probabilities when
-AUC is below 0.5 and retains original predictions and correction records.
-Survival evaluation requires \code{FALSE}.
-
-Fold-to-fold variability describes resampling variation, not a confidence
-interval. \code{\link[=sb_bootstrap_external]{sb_bootstrap_external()}} estimates external-patient sampling
-uncertainty conditional on the saved model and predictions. Survival metrics
-use the declared time unit, horizon and censoring assumptions.
+Use fold-to-fold variability to examine resampling variation. For
+external-patient sampling uncertainty, use
+\code{\link[=sb_bootstrap_external]{sb_bootstrap_external()}} with the saved model
+and predictions. Survival metrics use the declared time unit, horizon and
+censoring assumptions.
 Supply predictors on the study's preprocessing scale. Data-dependent
 preprocessing belongs within the relevant analysis folds; glmnet's optional
 internal standardization is fitted within each analysis set.
