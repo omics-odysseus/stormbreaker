@@ -738,19 +738,9 @@ that fixed presence/absence rule.
 
 ## Runnable examples
 
-Start with the [complete route workflow](../examples/scenarios/07-route-workflow.R)
-used in the repository README. It builds two routes, compares them on shared
-development folds, refits the selected route, then saves and reloads it for
-prediction without outcome columns. It uses `glmnet` and `ggplot2`.
-
-```r
-library(stormbreaker)
-source(system.file("examples", "scenarios", "07-route-workflow.R",
-  package = "stormbreaker", mustWork = TRUE))
-example_result$cv_auc[c("route", "estimate")]
-example_result$selected
-example_result$figures$ROC
-```
+Start with the [Quick start](https://github.com/omics-odysseus/stormbreaker#quick-start)
+to run the binary route workflow and the Cox survival example together on
+packaged synthetic data.
 
 For the three applications in the manuscript, see the
 [study examples](paper-cases.md). Use the scripts below for individual tasks.

@@ -25,25 +25,21 @@ for the methods you intend to use; the method menus report their status.
 
 ## Quick start
 
-Compare **two routes with the same Logistic predictor** using bundled synthetic
-data. One uses all candidate genes; the other selects genes with Lasso before
-fitting. This example uses `glmnet` and `ggplot2`; install them if needed. Each row
-is one sample with a unique `patient_id`, a 0/1 `outcome` (1 is positive) and
-numeric gene columns.
+Run both examples with the bundled synthetic data. Install `glmnet` and
+`ggplot2` if needed. The script reads the input files from the installed package.
 
 ```r
-library(stormbreaker)
-source(system.file("examples", "scenarios", "07-route-workflow.R",
+source(system.file("examples", "quick-start.R",
   package = "stormbreaker", mustWork = TRUE))
 
-example_result$cv_auc[c("route", "estimate")]
-example_result$selected
-example_result$test_auc[c("metric", "estimate")]
-head(example_result$prediction$predictions[c("patient_id", "probability")], 3)
+quick_start$binary$cv_auc[c("route", "estimate")]
+quick_start$binary$selected
+quick_start$binary$test_auc[c("metric", "estimate")]
+quick_start$survival$metrics[c("metric", "estimate")]
 ```
 
-The [complete script](inst/examples/scenarios/07-route-workflow.R) follows
-one set of objects from comparison through reuse:
+The [binary example](inst/examples/scenarios/07-route-workflow.R) follows
+the same objects from comparison through reuse:
 
 1. **Build:** define the direct and Lasso routes. Set the Lasso selection
    rule to `lambda.min` for this example.
@@ -53,8 +49,13 @@ one set of objects from comparison through reuse:
 3. **Refit:** fit the chosen route to the development data. Use the separate
    synthetic test cohort for evaluation.
 4. **Reuse:** save and reload the fit, then supply IDs and predictor columns
-   to predict. View the test ROC plot in
-   `example_result$figures$ROC`.
+   to predict. View the test ROC plot in `quick_start$binary$figures$ROC`.
+
+The [survival example](inst/examples/scenarios/04-survival.R) fits a Cox
+model, predicts in a separate synthetic cohort without using its outcomes
+as input, and reports concordance, time-dependent AUC and Brier score.
+See the [example-data notes](inst/extdata/demo-data.txt) for the input files
+and columns.
 
 For your own data, see the guide to
 [input format](inst/guides/user-guide.md#input-format) and

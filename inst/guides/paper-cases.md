@@ -1,10 +1,8 @@
 # Study examples
 
 Prepare the inputs below, then fit and apply the selected route for your case.
-To build and compare your own candidate routes, use the
-[README quick start](../../README.md#quick-start),
-[runnable example](../examples/scenarios/07-route-workflow.R) or the
-[user guide](user-guide.md).
+To run the complete workflow on bundled synthetic data first, use the
+[Quick start](https://github.com/omics-odysseus/stormbreaker#quick-start).
 
 ## Prepared inputs
 

@@ -1,10 +1,10 @@
-test_that("route quick start compares both routes and reuses the selected fit", {
+test_that("quick start compares binary routes and evaluates a survival model", {
   skip_if_not_installed("glmnet")
   skip_if_not_installed("ggplot2")
   env <- new.env(parent = globalenv())
-  sys.source(system.file("examples", "scenarios", "07-route-workflow.R",
+  sys.source(system.file("examples", "quick-start.R",
     package = "stormbreaker", mustWork = TRUE), envir = env)
-  x <- env$example_result
+  x <- env$quick_start$binary
 
   expect_identical(x$cv_auc$route, c("Direct", "Lasso"))
   expect_identical(x$cv_auc$status, rep("success", 2))
@@ -20,4 +20,9 @@ test_that("route quick start compares both routes and reuses the selected fit", 
   expect_equal(nrow(x$prediction$predictions), nrow(x$test_predictors))
   expect_identical(x$prediction$predictions, x$finished$predictions$Test)
   expect_s3_class(x$figures$ROC, "ggplot")
+
+  s <- env$quick_start$survival
+  expect_identical(s$metrics$status, "success")
+  expect_equal(nrow(s$prediction$predictions), nrow(s$external))
+  expect_s3_class(s$figures$Calibration, "ggplot")
 })
